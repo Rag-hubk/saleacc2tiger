@@ -3,6 +3,7 @@ from __future__ import annotations
 from contextlib import asynccontextmanager
 
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker, create_async_engine
+from sqlalchemy.ext.asyncio.engine import AsyncConnection
 
 from saleacc_bot.config import get_settings
 from saleacc_bot.models import Base
@@ -48,3 +49,49 @@ async def get_session() -> AsyncSession:
 async def init_db() -> None:
     async with engine.begin() as conn:
         await conn.run_sync(Base.metadata.create_all)
+        await _migrate_tg_id_columns_to_bigint(conn)
+
+
+async def _migrate_tg_id_columns_to_bigint(conn: AsyncConnection) -> None:
+    if conn.dialect.name != "postgresql":
+        return
+    await conn.exec_driver_sql(
+        """
+        DO $$
+        BEGIN
+            IF EXISTS (
+                SELECT 1
+                FROM information_schema.columns
+                WHERE table_schema = 'public'
+                  AND table_name = 'bot_users'
+                  AND column_name = 'tg_user_id'
+                  AND data_type = 'integer'
+            ) THEN
+                ALTER TABLE public.bot_users ALTER COLUMN tg_user_id TYPE BIGINT;
+            END IF;
+
+            IF EXISTS (
+                SELECT 1
+                FROM information_schema.columns
+                WHERE table_schema = 'public'
+                  AND table_name = 'orders'
+                  AND column_name = 'tg_user_id'
+                  AND data_type = 'integer'
+            ) THEN
+                ALTER TABLE public.orders ALTER COLUMN tg_user_id TYPE BIGINT;
+            END IF;
+
+            IF EXISTS (
+                SELECT 1
+                FROM information_schema.columns
+                WHERE table_schema = 'public'
+                  AND table_name = 'inventory_items'
+                  AND column_name = 'reserved_by_tg_id'
+                  AND data_type = 'integer'
+            ) THEN
+                ALTER TABLE public.inventory_items ALTER COLUMN reserved_by_tg_id TYPE BIGINT;
+            END IF;
+        END
+        $$;
+        """
+    )

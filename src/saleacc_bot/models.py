@@ -5,6 +5,7 @@ from datetime import datetime, timezone
 from typing import Optional
 
 from sqlalchemy import (
+    BigInteger,
     Boolean,
     DateTime,
     Enum,
@@ -73,7 +74,7 @@ class Order(Base):
     __tablename__ = "orders"
 
     id: Mapped[str] = mapped_column(String(36), primary_key=True)
-    tg_user_id: Mapped[int] = mapped_column(Integer, index=True)
+    tg_user_id: Mapped[int] = mapped_column(BigInteger, index=True)
     tg_username: Mapped[Optional[str]] = mapped_column(String(255), nullable=True)
 
     product_id: Mapped[int] = mapped_column(ForeignKey("products.id"), index=True)
@@ -106,7 +107,7 @@ class Order(Base):
 class BotUser(Base):
     __tablename__ = "bot_users"
 
-    tg_user_id: Mapped[int] = mapped_column(Integer, primary_key=True)
+    tg_user_id: Mapped[int] = mapped_column(BigInteger, primary_key=True)
     tg_username: Mapped[Optional[str]] = mapped_column(String(255), nullable=True)
     first_name: Mapped[Optional[str]] = mapped_column(String(255), nullable=True)
     last_name: Mapped[Optional[str]] = mapped_column(String(255), nullable=True)
@@ -138,7 +139,7 @@ class InventoryItem(Base):
     status: Mapped[InventoryStatus] = mapped_column(Enum(InventoryStatus), index=True)
 
     reserved_for_order_id: Mapped[Optional[str]] = mapped_column(ForeignKey("orders.id"), nullable=True, index=True)
-    reserved_by_tg_id: Mapped[Optional[int]] = mapped_column(Integer, nullable=True)
+    reserved_by_tg_id: Mapped[Optional[int]] = mapped_column(BigInteger, nullable=True)
     reserved_until: Mapped[Optional[datetime]] = mapped_column(DateTime(timezone=True), nullable=True)
 
     sold_at: Mapped[Optional[datetime]] = mapped_column(DateTime(timezone=True), nullable=True)
