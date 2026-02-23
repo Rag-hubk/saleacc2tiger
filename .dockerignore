@@ -1,0 +1,15 @@
+.git
+.venv
+__pycache__
+*.pyc
+*.pyo
+*.pyd
+.pytest_cache
+.ruff_cache
+.DS_Store
+
+.env
+data/storage/*.db
+data/storage/*.log
+data/storage/exports
+keys/*.json

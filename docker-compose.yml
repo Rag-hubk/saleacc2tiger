@@ -1,0 +1,35 @@
+services:
+  bot:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    image: saleacc-bot:latest
+    container_name: saleacc-bot
+    restart: unless-stopped
+    env_file:
+      - .env
+    environment:
+      PYTHONPATH: src
+      GOOGLE_SERVICE_ACCOUNT_FILE: /app/keys/google-sa.json
+    command: ["python", "-m", "saleacc_bot.main"]
+    volumes:
+      - ./data/storage:/app/data/storage
+      - ./keys:/app/keys:ro
+
+  webhook:
+    image: saleacc-bot:latest
+    container_name: saleacc-webhook
+    restart: unless-stopped
+    env_file:
+      - .env
+    environment:
+      PYTHONPATH: src
+      GOOGLE_SERVICE_ACCOUNT_FILE: /app/keys/google-sa.json
+    command: ["uvicorn", "saleacc_bot.webhook_app:app", "--host", "0.0.0.0", "--port", "8000"]
+    volumes:
+      - ./data/storage:/app/data/storage
+      - ./keys:/app/keys:ro
+    ports:
+      - "8000:8000"
+    profiles:
+      - webhook
