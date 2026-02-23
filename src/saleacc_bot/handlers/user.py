@@ -1,6 +1,5 @@
 from __future__ import annotations
 
-import time
 from html import escape
 
 from aiogram import F, Router
@@ -38,8 +37,6 @@ from saleacc_bot.ui import is_admin, main_menu_payload
 router = Router(name="user")
 settings = get_settings()
 crypto_client = CryptoBotClient(settings)
-START_DEDUP_SECONDS = 1.5
-_last_start_at: dict[int, float] = {}
 _main_menu_message_id: dict[int, int] = {}
 GROUP_ORDER = ("gpt-pro", "lovable", "replit")
 
@@ -286,12 +283,6 @@ async def on_start(message: Message) -> None:
             last_name=message.from_user.last_name,
         )
 
-    now = time.monotonic()
-    last_ts = _last_start_at.get(message.from_user.id)
-    if last_ts is not None and now - last_ts < START_DEDUP_SECONDS:
-        return
-    _last_start_at[message.from_user.id] = now
-
     prev_menu_id = _main_menu_message_id.get(message.from_user.id)
     if prev_menu_id:
         try:
@@ -307,6 +298,8 @@ async def on_start(message: Message) -> None:
 @router.callback_query(F.data == "main")
 async def on_main(callback: CallbackQuery) -> None:
     await _safe_edit(callback, *main_menu_payload(settings, callback.from_user.id))
+    if callback.message:
+        _main_menu_message_id[callback.from_user.id] = callback.message.message_id
     await callback.answer()
 
 
@@ -703,6 +696,8 @@ async def _start_checkout(callback: CallbackQuery, product_id: int, method: str,
         await callback.answer("Не удалось сформировать CSV", show_alert=True)
         return
     await _safe_edit(callback, *main_menu_payload(settings, callback.from_user.id))
+    if callback.message:
+        _main_menu_message_id[callback.from_user.id] = callback.message.message_id
     if callback.message:
         doc_message = await callback.message.answer_document(
             document=FSInputFile(str(csv_path)),
