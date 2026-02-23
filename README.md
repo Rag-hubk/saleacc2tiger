@@ -195,6 +195,52 @@ Docker files:
 - `docker-compose.yml`
 - `requirements.txt`
 
+## Railway Deploy
+
+Use two Railway services from one repository:
+
+- `bot` service (Telegram polling)
+- `webhook` service (public HTTPS endpoint for CryptoBot/Tribute)
+
+### 1. Create shared Postgres
+
+Add PostgreSQL in Railway project and use it for both services.
+
+### 2. Create service `bot` from this repo
+
+- Start Command: `./scripts/start_bot_railway.sh`
+- Variables:
+  - `DATABASE_URL` -> Postgres URL
+  - `TELEGRAM_BOT_TOKEN`
+  - `TELEGRAM_ADMIN_IDS`
+  - `SUPPORT_URL`
+  - `GOOGLE_SHEET_ID`
+  - `GOOGLE_SERVICE_ACCOUNT_JSON_B64` (base64 of Google SA JSON)
+  - `TRIBUTE_ENABLED`
+  - `TRIBUTE_WEBHOOK_SECRET`
+  - `CRYPTOBOT_ENABLED`
+  - `CRYPTOBOT_API_TOKEN`
+  - `CRYPTOBOT_ASSET`
+  - all `TRIBUTE_LINK_*` variables
+  - `TEST_MODE_ENABLED`
+  - `TEST_MODE_ADMIN_ONLY`
+
+### 3. Create service `webhook` from this repo
+
+- Start Command: `./scripts/start_webhook_railway.sh`
+- Use the same variables as in `bot`.
+- Generate public domain in Railway.
+
+### 4. Configure webhook URL in CryptoBot
+
+Set URL:
+
+`https://<railway-webhook-domain>/webhooks/cryptobot`
+
+Health check:
+
+`https://<railway-webhook-domain>/health`
+
 ## Admin
 
 - In bot main menu, admins see `Admin` button.
