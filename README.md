@@ -29,8 +29,7 @@ Key variables:
 - `CRYPTOBOT_API_BASE`
 - `CRYPTOBOT_API_TOKEN`
 - `CRYPTOBOT_ASSET`
-- `TEST_MODE_ENABLED` (`true/false`) - allow issue without real payment
-- `TEST_MODE_ADMIN_ONLY` (`true/false`) - show test button only for admins
+- `CRYPTO_BUY_URL` (optional shortcut button to buy crypto)
 
 ## Google Sheet setup
 
@@ -146,18 +145,6 @@ Stop local bot processes:
 ./scripts/stop_local_bot.sh
 ```
 
-## Test mode without payment
-
-Set in `.env`:
-
-```env
-TEST_MODE_ENABLED=true
-TEST_MODE_ADMIN_ONLY=true
-```
-
-Then in product checkout screen admin will see button `Тест: без оплаты`.
-It creates order, marks paid, updates Sheet and sends CSV immediately.
-
 ## Run webhook app
 
 ```bash
@@ -206,8 +193,7 @@ Add PostgreSQL in Railway project and use it for both services.
   - `CRYPTOBOT_ENABLED`
   - `CRYPTOBOT_API_TOKEN`
   - `CRYPTOBOT_ASSET`
-  - `TEST_MODE_ENABLED`
-  - `TEST_MODE_ADMIN_ONLY`
+  - `CRYPTO_BUY_URL` (optional)
 
 ### 3. Create service `webhook` from this repo
 

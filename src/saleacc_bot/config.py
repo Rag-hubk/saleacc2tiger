@@ -34,13 +34,6 @@ class Settings:
     cryptobot_asset: str
     crypto_buy_url: str
 
-    payment_test_enabled: bool
-    payment_test_product_slug: str
-    payment_test_crypto_price_cents: int
-
-    test_mode_enabled: bool
-    test_mode_admin_only: bool
-
     export_dir: str
     google_sheet_id: str
     google_service_account_file: str
@@ -78,18 +71,6 @@ def _require_env(name: str) -> str:
     return value
 
 
-def _parse_int(value: str | None, default: int) -> int:
-    if value is None:
-        return default
-    raw = value.strip()
-    if not raw:
-        return default
-    try:
-        return int(raw)
-    except ValueError:
-        return default
-
-
 def _opt_env(name: str) -> str:
     value = os.getenv(name, "").strip()
     if value in {"...", "replace_me", "replace_with_value"}:
@@ -119,11 +100,6 @@ def get_settings() -> Settings:
         cryptobot_api_token=_opt_env("CRYPTOBOT_API_TOKEN"),
         cryptobot_asset=os.getenv("CRYPTOBOT_ASSET", "USDT"),
         crypto_buy_url=os.getenv("CRYPTO_BUY_URL", "https://t.me/send?start=r-t3x5q-market").strip(),
-        payment_test_enabled=_parse_bool(os.getenv("PAYMENT_TEST_ENABLED"), False),
-        payment_test_product_slug=os.getenv("PAYMENT_TEST_PRODUCT_SLUG", "gpt-pro-1m").strip(),
-        payment_test_crypto_price_cents=_parse_int(os.getenv("PAYMENT_TEST_CRYPTO_PRICE_CENTS"), 100),
-        test_mode_enabled=_parse_bool(os.getenv("TEST_MODE_ENABLED"), False),
-        test_mode_admin_only=_parse_bool(os.getenv("TEST_MODE_ADMIN_ONLY"), True),
         export_dir=os.getenv("EXPORT_DIR", "data/storage/exports"),
         google_sheet_id=_require_env("GOOGLE_SHEET_ID"),
         google_service_account_file=_require_env("GOOGLE_SERVICE_ACCOUNT_FILE"),

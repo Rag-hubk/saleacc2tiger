@@ -5,7 +5,7 @@ import logging
 from aiogram import F, Router
 from aiogram.exceptions import TelegramBadRequest
 from aiogram.filters import CommandStart
-from aiogram.types import CallbackQuery, FSInputFile, Message
+from aiogram.types import CallbackQuery, Message
 
 from saleacc_bot.config import get_settings
 from saleacc_bot.db import get_session
@@ -23,14 +23,12 @@ from saleacc_bot.services.inventory import get_stock_map
 from saleacc_bot.services.orders import (
     cancel_pending_order,
     create_order_with_reservation,
-    deliver_order_csv,
     get_order,
     list_user_orders,
-    mark_order_paid,
     set_order_checkout_message,
 )
 from saleacc_bot.services.users import touch_user
-from saleacc_bot.ui import is_admin, main_menu_payload
+from saleacc_bot.ui import main_menu_payload
 
 router = Router(name="user")
 settings = get_settings()
@@ -38,24 +36,6 @@ crypto_client = CryptoBotClient(settings)
 _main_menu_message_id: dict[int, int] = {}
 GROUP_ORDER = ("gpt-pro", "lovable", "replit")
 logger = logging.getLogger(__name__)
-
-
-def _effective_unit_price_cents(product, method: str) -> int:
-    if (
-        settings.payment_test_enabled
-        and product.slug == settings.payment_test_product_slug
-    ):
-        if method == "crypto":
-            return max(1, settings.payment_test_crypto_price_cents)
-    return product.price_usd_cents
-
-
-def _is_test_mode_available(user_id: int) -> bool:
-    if not settings.test_mode_enabled:
-        return False
-    if settings.test_mode_admin_only and not is_admin(settings, user_id):
-        return False
-    return True
 
 
 def _is_crypto_available() -> bool:
@@ -206,7 +186,7 @@ def _group_variants(group: str, products: list, stock_map: dict[int, int]) -> li
 
 def _normalize_payment_method(method: str) -> str | None:
     normalized = method.strip().lower()
-    if normalized in {"crypto", "test", "pick"}:
+    if normalized in {"crypto", "pick"}:
         return normalized
     return None
 
@@ -231,7 +211,7 @@ def _format_order_total(order) -> str:
 
 
 def _quantity_screen_text(product, stock: int, qty: int, method: str) -> str:
-    unit_price = _effective_unit_price_cents(product, method) if method == "crypto" else product.price_usd_cents
+    unit_price = product.price_usd_cents
     lines = [
         "<b>Выбор количества</b>",
         "",
@@ -428,14 +408,11 @@ async def on_pay_method(callback: CallbackQuery) -> None:
     if method is None:
         await callback.answer("Некорректный способ оплаты", show_alert=True)
         return
-    if method not in {"crypto", "test"}:
+    if method != "crypto":
         await callback.answer("Доступна только крипто-оплата", show_alert=True)
         return
     if method == "crypto" and not _is_crypto_available():
         await callback.answer("Крипто-оплата временно недоступна", show_alert=True)
-        return
-    if method == "test" and not _is_test_mode_available(callback.from_user.id):
-        await callback.answer("Тестовый режим отключен", show_alert=True)
         return
 
     await _start_checkout(callback, product_id, method, qty)
@@ -458,9 +435,6 @@ async def on_qty_set(callback: CallbackQuery) -> None:
 
     if method == "crypto" and not _is_crypto_available():
         await callback.answer("Крипто-оплата временно недоступна", show_alert=True)
-        return
-    if method == "test" and not _is_test_mode_available(callback.from_user.id):
-        await callback.answer("Тестовый режим отключен", show_alert=True)
         return
 
     async with get_session() as session:
@@ -563,11 +537,8 @@ async def _start_checkout(callback: CallbackQuery, product_id: int, method: str,
     if method == "crypto" and not _is_crypto_available():
         await callback.answer("Крипто-оплата временно недоступна", show_alert=True)
         return
-    if method not in {"crypto", "test"}:
+    if method != "crypto":
         await callback.answer("Доступна только крипто-оплата", show_alert=True)
-        return
-    if method == "test" and not _is_test_mode_available(callback.from_user.id):
-        await callback.answer("Тестовый режим отключен", show_alert=True)
         return
 
     async with get_session() as session:
@@ -583,52 +554,6 @@ async def _start_checkout(callback: CallbackQuery, product_id: int, method: str,
             await callback.answer("Недостаточно товара в наличии", show_alert=True)
             return
 
-        if method == "crypto":
-            order = await create_order_with_reservation(
-                session,
-                user_id=callback.from_user.id,
-                username=callback.from_user.username,
-                product=product,
-                quantity=qty,
-                payment_method=PaymentMethod.CRYPTO,
-                unit_price_cents=_effective_unit_price_cents(product, "crypto"),
-            )
-            if order is None:
-                await callback.answer("Недостаточно товара в наличии", show_alert=True)
-                return
-
-            try:
-                invoice = await crypto_client.create_invoice(
-                    order_id=order.id,
-                    amount_usd_cents=order.total_price,
-                    product_title=product.title,
-                    quantity=qty,
-                )
-            except Exception:
-                await callback.answer(
-                    "Не удалось создать крипто-инвойс. Проверьте CRYPTOBOT_API_TOKEN в .env.",
-                    show_alert=True,
-                )
-                return
-
-            await _safe_edit(
-                callback,
-                "<b>Оплата криптой</b>\n\n"
-                "1. Нажмите кнопку ниже.\n"
-                "2. Оплатите инвойс в Crypto Bot.\n"
-                "3. После webhook-подтверждения заказ будет выдан автоматически.",
-                cryptobot_checkout_keyboard(invoice.pay_url, order.id),
-            )
-            if callback.message:
-                await set_order_checkout_message(
-                    session,
-                    order_id=order.id,
-                    chat_id=callback.message.chat.id,
-                    message_id=callback.message.message_id,
-                )
-            await callback.answer()
-            return
-
         order = await create_order_with_reservation(
             session,
             user_id=callback.from_user.id,
@@ -636,44 +561,42 @@ async def _start_checkout(callback: CallbackQuery, product_id: int, method: str,
             product=product,
             quantity=qty,
             payment_method=PaymentMethod.CRYPTO,
+            unit_price_cents=product.price_usd_cents,
         )
         if order is None:
             await callback.answer("Недостаточно товара в наличии", show_alert=True)
             return
 
-        paid = await mark_order_paid(
-            session,
-            order_id=order.id,
-            provider_charge_id="test-mode",
-            telegram_payment_charge_id="test-mode",
-        )
-        if paid is None:
-            await callback.answer("Не удалось провести тестовый заказ", show_alert=True)
+        try:
+            invoice = await crypto_client.create_invoice(
+                order_id=order.id,
+                amount_usd_cents=order.total_price,
+                product_title=product.title,
+                quantity=qty,
+            )
+        except Exception:
+            await callback.answer(
+                "Не удалось создать крипто-инвойс. Проверьте CRYPTOBOT_API_TOKEN в .env.",
+                show_alert=True,
+            )
             return
 
-        csv_path = await deliver_order_csv(
-            session,
-            order_id=order.id,
-            export_dir=settings.export_dir,
+        await _safe_edit(
+            callback,
+            "<b>Оплата криптой</b>\n\n"
+            "1. Нажмите кнопку ниже.\n"
+            "2. Оплатите инвойс в Crypto Bot.\n"
+            "3. После webhook-подтверждения заказ будет выдан автоматически.",
+            cryptobot_checkout_keyboard(invoice.pay_url, order.id),
         )
-
-    if csv_path is None:
-        await callback.answer("Не удалось сформировать CSV", show_alert=True)
-        return
-    await _safe_edit(callback, *main_menu_payload(settings, callback.from_user.id))
-    if callback.message:
-        _main_menu_message_id[callback.from_user.id] = callback.message.message_id
-    if callback.message:
-        doc_message = await callback.message.answer_document(
-            document=FSInputFile(str(csv_path)),
-            caption=f"Тестовый заказ <code>{order.id[:8]}</code>",
-            parse_mode="HTML",
-        )
-        try:
-            await doc_message.pin(disable_notification=True)
-        except TelegramBadRequest:
-            pass
-    await callback.answer("Готово")
+        if callback.message:
+            await set_order_checkout_message(
+                session,
+                order_id=order.id,
+                chat_id=callback.message.chat.id,
+                message_id=callback.message.message_id,
+            )
+        await callback.answer()
 
 
 @router.message(F.text & ~F.text.startswith("/"))
