@@ -36,6 +36,7 @@ crypto_client = CryptoBotClient(settings)
 _main_menu_message_id: dict[int, int] = {}
 GROUP_ORDER = ("gpt-pro", "lovable", "replit")
 logger = logging.getLogger(__name__)
+PUBLIC_OFFER_URL = "https://telegra.ph/Publicchnaya-oferta-i-pravila-ispolzovaniya-servisa-Vibestack-02-24"
 
 
 def _is_crypto_available() -> bool:
@@ -49,11 +50,20 @@ async def _safe_delete_user_message(message: Message) -> None:
         pass
 
 
-async def _safe_edit(callback: CallbackQuery, text: str, reply_markup) -> None:
+async def _safe_edit(
+    callback: CallbackQuery,
+    text: str,
+    reply_markup,
+    *,
+    disable_web_page_preview: bool | None = None,
+) -> None:
     if callback.message is None:
         return
     try:
-        await callback.message.edit_text(text, reply_markup=reply_markup, parse_mode="HTML")
+        kwargs = {"reply_markup": reply_markup, "parse_mode": "HTML"}
+        if disable_web_page_preview is not None:
+            kwargs["disable_web_page_preview"] = disable_web_page_preview
+        await callback.message.edit_text(text, **kwargs)
     except TelegramBadRequest as exc:
         if "message is not modified" not in str(exc):
             raise
@@ -584,10 +594,13 @@ async def _start_checkout(callback: CallbackQuery, product_id: int, method: str,
         await _safe_edit(
             callback,
             "<b>Оплата криптой</b>\n\n"
+            'Нажимая кнопку оплаты, вы подтверждаете, что ознакомлены и согласны с условиями '
+            f'<a href="{PUBLIC_OFFER_URL}">Публичной оферты</a>.\n\n'
             "1. Нажмите кнопку ниже.\n"
             "2. Оплатите инвойс в Crypto Bot.\n"
             "3. После webhook-подтверждения заказ будет выдан автоматически.",
             cryptobot_checkout_keyboard(invoice.pay_url, order.id),
+            disable_web_page_preview=True,
         )
         if callback.message:
             await set_order_checkout_message(
