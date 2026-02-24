@@ -134,6 +134,36 @@ async def mark_order_paid(
     return order
 
 
+async def cancel_pending_order(
+    session: AsyncSession,
+    *,
+    order_id: str,
+    user_id: int,
+) -> Order | None:
+    await cleanup_expired_reservations(session, auto_commit=False)
+
+    order = await get_order(session, order_id)
+    if order is None:
+        return None
+    if order.tg_user_id != user_id:
+        return None
+    if order.status in {OrderStatus.PAID, OrderStatus.DELIVERED}:
+        return order
+    if order.status in {OrderStatus.CANCELLED, OrderStatus.FAILED}:
+        return order
+
+    released = await get_sheets_store().release_reserved_items(
+        order_id=order.id,
+        buyer_tg_id=user_id,
+    )
+    if released:
+        await invalidate_stock_cache()
+
+    order.status = OrderStatus.CANCELLED
+    await session.commit()
+    return order
+
+
 async def deliver_order_csv(
     session: AsyncSession,
     *,

@@ -118,20 +118,20 @@ def quantity_selector_keyboard(
     return InlineKeyboardMarkup(inline_keyboard=rows)
 
 
-def tribute_checkout_keyboard(url: str, product_id: int, qty: int) -> InlineKeyboardMarkup:
+def tribute_checkout_keyboard(url: str, order_id: str) -> InlineKeyboardMarkup:
     return InlineKeyboardMarkup(
         inline_keyboard=[
             [_inline_button("Перейти к оплате картой", url=url)],
-            [_inline_button("Каталог", callback_data="catalog")],
+            [_inline_button("Отменить оплату", callback_data=f"paycancel:{order_id}")],
         ]
     )
 
 
-def cryptobot_checkout_keyboard(url: str, product_id: int, qty: int) -> InlineKeyboardMarkup:
+def cryptobot_checkout_keyboard(url: str, order_id: str) -> InlineKeyboardMarkup:
     return InlineKeyboardMarkup(
         inline_keyboard=[
             [_inline_button("Оплатить криптой", url=url)],
-            [_inline_button("Каталог", callback_data="catalog")],
+            [_inline_button("Отменить оплату", callback_data=f"paycancel:{order_id}")],
         ]
     )
 

@@ -79,10 +79,12 @@ async def health() -> dict[str, str]:
 @app.post("/webhooks/tribute")
 async def tribute_webhook(
     request: Request,
+    trbt_signature: str | None = Header(default=None, alias="trbt-signature"),
     x_tribute_signature: str | None = Header(default=None),
 ) -> dict[str, str]:
     body = await request.body()
-    if not _verify_tribute_signature(body, x_tribute_signature):
+    signature = trbt_signature or x_tribute_signature
+    if not _verify_tribute_signature(body, signature):
         raise HTTPException(status_code=401, detail="invalid signature")
 
     try:

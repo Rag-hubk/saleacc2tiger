@@ -26,6 +26,7 @@ from saleacc_bot.services.inventory import get_stock_map
 from saleacc_bot.services.orders import (
     RESERVE_MINUTES,
     build_tribute_url_for_product,
+    cancel_pending_order,
     cleanup_expired_reservations,
     create_order_with_reservation,
     deliver_order_csv,
@@ -626,6 +627,40 @@ async def on_qty_go(callback: CallbackQuery) -> None:
     await _start_checkout(callback, product_id, method, qty)
 
 
+@router.callback_query(F.data.startswith("paycancel:"))
+async def on_pay_cancel(callback: CallbackQuery) -> None:
+    _, _, order_id = callback.data.partition(":")
+    order_id = order_id.strip()
+    if not order_id:
+        await callback.answer("Некорректный заказ", show_alert=True)
+        return
+
+    async with get_session() as session:
+        order = await get_order(session, order_id)
+        if order is None or order.tg_user_id != callback.from_user.id:
+            await callback.answer("Заказ не найден", show_alert=True)
+            return
+
+        if order.status in {OrderStatus.PAID, OrderStatus.DELIVERED}:
+            await callback.answer("Заказ уже оплачен", show_alert=True)
+            return
+
+        await cancel_pending_order(
+            session,
+            order_id=order_id,
+            user_id=callback.from_user.id,
+        )
+
+    task = _checkout_timeout_tasks.pop(order_id, None)
+    if task and not task.done():
+        task.cancel()
+
+    await _safe_edit(callback, *main_menu_payload(settings, callback.from_user.id))
+    if callback.message:
+        _main_menu_message_id[callback.from_user.id] = callback.message.message_id
+    await callback.answer("Оплата отменена")
+
+
 async def _start_checkout(callback: CallbackQuery, product_id: int, method: str, qty: int) -> None:
     if method == "crypto" and not _is_crypto_available():
         await callback.answer("Крипто-оплата временно недоступна", show_alert=True)
@@ -683,7 +718,7 @@ async def _start_checkout(callback: CallbackQuery, product_id: int, method: str,
                 "1. Нажмите кнопку ниже.\n"
                 "2. Оплатите инвойс в Crypto Bot.\n"
                 "3. После webhook-подтверждения заказ будет выдан автоматически.",
-                cryptobot_checkout_keyboard(invoice.pay_url, product_id, qty),
+                cryptobot_checkout_keyboard(invoice.pay_url, order.id),
             )
             if callback.message:
                 _schedule_checkout_timeout(
@@ -733,7 +768,7 @@ async def _start_checkout(callback: CallbackQuery, product_id: int, method: str,
                 "1. Нажмите кнопку ниже.\n"
                 "2. Завершите оплату на стороне Tribute.\n"
                 "3. После webhook-подтверждения заказ будет выдан автоматически.",
-                tribute_checkout_keyboard(tribute_url, product_id, qty),
+                tribute_checkout_keyboard(tribute_url, order.id),
             )
             if callback.message:
                 _schedule_checkout_timeout(

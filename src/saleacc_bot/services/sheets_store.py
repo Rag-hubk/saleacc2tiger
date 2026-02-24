@@ -111,6 +111,19 @@ class SheetsStore:
             )
             return [item.payload for item in claimed]
 
+    async def release_reserved_items(
+        self,
+        *,
+        order_id: str,
+        buyer_tg_id: int | None = None,
+    ) -> int:
+        async with self._lock:
+            return await asyncio.to_thread(
+                self._release_reserved_items_sync,
+                order_id,
+                buyer_tg_id,
+            )
+
     async def append_sale_log(
         self,
         *,
@@ -355,6 +368,62 @@ class SheetsStore:
                 item.payload[header] = row_values[i]
 
         return candidates
+
+    def _release_reserved_items_sync(
+        self,
+        order_id: str,
+        buyer_tg_id: int | None,
+    ) -> int:
+        ws = self._inventory_ws()
+        values = ws.get_all_values()
+        if not values:
+            return 0
+
+        headers = values[0]
+        header_map = self._header_map(headers)
+        self._cleanup_expired_reservations_in_memory(ws, values, header_map)
+
+        status_i = self._required_index(header_map, "status")
+        reserved_for_order_i = self._required_index(header_map, "reserved_for_order_id")
+        reserved_until_i = self._required_index(header_map, "reserved_until")
+        reserved_by_tg_i = header_map.get("reserved_by_tg_id")
+        reserved_at_i = header_map.get("reserved_at")
+
+        last_col = _col_to_a1(len(headers))
+        released = 0
+
+        for row_idx, row in enumerate(values[1:], start=2):
+            status = self._cell(row, status_i).strip().lower()
+            if status != RESERVED_STATUS:
+                continue
+            reserved_order = self._cell(row, reserved_for_order_i).strip()
+            if reserved_order != order_id:
+                continue
+            if buyer_tg_id is not None and reserved_by_tg_i is not None:
+                holder = self._cell(row, reserved_by_tg_i).strip()
+                if holder and holder != str(buyer_tg_id):
+                    continue
+
+            row_values = ws.row_values(row_idx)
+            if len(row_values) < len(headers):
+                row_values.extend([""] * (len(headers) - len(row_values)))
+
+            row_values[status_i] = "free"
+            row_values[reserved_for_order_i] = ""
+            row_values[reserved_until_i] = ""
+            if reserved_by_tg_i is not None:
+                row_values[reserved_by_tg_i] = ""
+            if reserved_at_i is not None:
+                row_values[reserved_at_i] = ""
+
+            ws.update(
+                f"A{row_idx}:{last_col}{row_idx}",
+                [row_values],
+                value_input_option="USER_ENTERED",
+            )
+            released += 1
+
+        return released
 
     def _cleanup_expired_reservations_in_memory(
         self,
