@@ -119,11 +119,11 @@ def _variant_label(product_slug: str) -> str:
     if product_slug == "gpt-pro-3m":
         return "3 месяца"
     if product_slug == "lovable-100":
-        return "100 токенов"
+        return "105 токенов"
     if product_slug == "lovable-200":
-        return "200 токенов"
+        return "205 токенов"
     if product_slug == "lovable-300":
-        return "300 токенов"
+        return "305 токенов"
     if product_slug == "replit-core":
         return "Core"
     if product_slug == "replit-team":
