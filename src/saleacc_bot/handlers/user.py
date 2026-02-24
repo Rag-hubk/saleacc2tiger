@@ -211,16 +211,6 @@ def _normalize_payment_method(method: str) -> str | None:
     return None
 
 
-def _payment_method_label(method: str) -> str:
-    if method == "crypto":
-        return "Криптой"
-    if method == "test":
-        return "Тестовый режим"
-    if method == "pick":
-        return "не выбран"
-    return method
-
-
 def _format_order_status(status: str) -> str:
     by_status = {
         "created": "создан",
@@ -246,7 +236,6 @@ def _quantity_screen_text(product, stock: int, qty: int, method: str) -> str:
         "<b>Выбор количества</b>",
         "",
         f"Товар: <b>{escape(product.title)}</b>",
-        f"Способ оплаты: <b>{_payment_method_label(method)}</b>",
         f"В наличии: <code>{stock}</code>",
         f"Выбрано: <code>{qty}</code>",
         f"Итого: <code>${((unit_price * qty) / 100):.2f}</code>",
@@ -334,7 +323,6 @@ async def on_orders(callback: CallbackQuery) -> None:
             )
             lines.append(
                 f"{escape(_format_order_status(order.status.value))} | "
-                f"{escape(_payment_method_label(order.payment_method.value))} | "
                 f"{_format_order_total(order)}"
             )
             lines.append("")
