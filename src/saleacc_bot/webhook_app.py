@@ -3,6 +3,7 @@ from __future__ import annotations
 import hashlib
 import hmac
 import json
+import asyncio
 from typing import Any
 
 from aiogram import Bot
@@ -19,15 +20,18 @@ from saleacc_bot.services.cryptobot import (
     verify_cryptobot_signature,
 )
 from saleacc_bot.services.inventory import get_sheets_store
+from saleacc_bot.models import OrderStatus
 from saleacc_bot.services.orders import (
     deliver_order_csv,
     find_pending_fiat_order_for_tribute,
+    get_order,
     mark_order_paid,
 )
 from saleacc_bot.ui import main_menu_payload
 
 app = FastAPI(title="saleacc payment webhooks")
 settings = get_settings()
+_cryptobot_order_locks: dict[str, asyncio.Lock] = {}
 
 
 class TributeEvent(BaseModel):
@@ -43,6 +47,14 @@ def _to_int(value: Any) -> int | None:
         return int(str(value).strip())
     except (TypeError, ValueError):
         return None
+
+
+def _get_order_lock(order_id: str) -> asyncio.Lock:
+    lock = _cryptobot_order_locks.get(order_id)
+    if lock is None:
+        lock = asyncio.Lock()
+        _cryptobot_order_locks[order_id] = lock
+    return lock
 
 
 def _verify_tribute_signature(body: bytes, signature: str | None) -> bool:
@@ -211,32 +223,40 @@ async def cryptobot_webhook(
         return {"result": "ignored"}
 
     invoice_id = extract_invoice_id_from_update(payload)
+    async with _get_order_lock(order_id):
+        async with get_session() as session:
+            existing = await get_order(session, order_id)
+            if existing is None:
+                raise HTTPException(status_code=404, detail="order not found")
 
-    async with get_session() as session:
-        order = await mark_order_paid(
-            session,
-            order_id=order_id,
-            provider_charge_id=invoice_id,
-            telegram_payment_charge_id=None,
-        )
-        if order is None:
-            raise HTTPException(status_code=404, detail="order not found or invalid state")
+            # Crypto webhook can be retried; do not send delivery twice.
+            if existing.status == OrderStatus.DELIVERED:
+                return {"result": "ok"}
 
-        csv_path = await deliver_order_csv(
-            session,
-            order_id=order.id,
-            export_dir=settings.export_dir,
-        )
+            order = await mark_order_paid(
+                session,
+                order_id=order_id,
+                provider_charge_id=invoice_id,
+                telegram_payment_charge_id=None,
+            )
+            if order is None:
+                raise HTTPException(status_code=404, detail="order not found or invalid state")
 
-    bot = Bot(token=settings.bot_token)
-    try:
-        await _notify_user_delivery(
-            bot=bot,
-            tg_user_id=order.tg_user_id,
-            order_id=order.id,
-            csv_path=str(csv_path) if csv_path else None,
-        )
-    finally:
-        await bot.session.close()
+            csv_path = await deliver_order_csv(
+                session,
+                order_id=order.id,
+                export_dir=settings.export_dir,
+            )
+
+        bot = Bot(token=settings.bot_token)
+        try:
+            await _notify_user_delivery(
+                bot=bot,
+                tg_user_id=order.tg_user_id,
+                order_id=order.id,
+                csv_path=str(csv_path) if csv_path else None,
+            )
+        finally:
+            await bot.session.close()
 
     return {"result": "ok"}

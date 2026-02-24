@@ -172,6 +172,18 @@ def _format_user_label(user_id: int, username: str | None) -> str:
     return str(user_id)
 
 
+def _format_order_status(status: str) -> str:
+    by_status = {
+        "created": "создан",
+        "pending_payment": "ожидает оплату",
+        "paid": "оплачен",
+        "delivered": "выдан",
+        "cancelled": "отменен",
+        "failed": "ошибка",
+    }
+    return by_status.get(status, status)
+
+
 async def _load_paid_buyers() -> list[dict[str, object]]:
     async with get_session() as session:
         orders = list(
