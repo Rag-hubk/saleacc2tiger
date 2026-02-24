@@ -627,7 +627,11 @@ async def _start_checkout(callback: CallbackQuery, product_id: int, method: str,
                 "1. Нажмите кнопку ниже.\n"
                 "2. Оплатите инвойс в Crypto Bot.\n"
                 "3. После webhook-подтверждения заказ будет выдан автоматически.",
-                cryptobot_checkout_keyboard(invoice.pay_url, order.id),
+                cryptobot_checkout_keyboard(
+                    invoice.pay_url,
+                    order.id,
+                    buy_crypto_url=settings.crypto_buy_url,
+                ),
             )
             if callback.message:
                 await set_order_checkout_message(

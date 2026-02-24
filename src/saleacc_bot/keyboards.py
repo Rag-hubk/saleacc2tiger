@@ -125,13 +125,14 @@ def tribute_checkout_keyboard(url: str, order_id: str) -> InlineKeyboardMarkup:
     )
 
 
-def cryptobot_checkout_keyboard(url: str, order_id: str) -> InlineKeyboardMarkup:
-    return InlineKeyboardMarkup(
-        inline_keyboard=[
-            [_inline_button("Оплатить криптой", url=url)],
-            [_inline_button("Отменить оплату", callback_data=f"paycancel:{order_id}", style="danger")],
-        ]
-    )
+def cryptobot_checkout_keyboard(url: str, order_id: str, *, buy_crypto_url: str | None = None) -> InlineKeyboardMarkup:
+    rows: list[list[InlineKeyboardButton]] = [
+        [_inline_button("Оплатить криптой", url=url)],
+    ]
+    if buy_crypto_url:
+        rows.append([_inline_button("Удобно купить крипту тут", url=buy_crypto_url)])
+    rows.append([_inline_button("Отменить оплату", callback_data=f"paycancel:{order_id}", style="danger")])
+    return InlineKeyboardMarkup(inline_keyboard=rows)
 
 
 def orders_keyboard() -> InlineKeyboardMarkup:

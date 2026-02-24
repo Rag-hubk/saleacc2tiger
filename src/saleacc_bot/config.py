@@ -32,6 +32,7 @@ class Settings:
     cryptobot_api_base: str
     cryptobot_api_token: str
     cryptobot_asset: str
+    crypto_buy_url: str
 
     payment_test_enabled: bool
     payment_test_product_slug: str
@@ -117,6 +118,7 @@ def get_settings() -> Settings:
         cryptobot_api_base=os.getenv("CRYPTOBOT_API_BASE", "https://pay.crypt.bot/api"),
         cryptobot_api_token=_opt_env("CRYPTOBOT_API_TOKEN"),
         cryptobot_asset=os.getenv("CRYPTOBOT_ASSET", "USDT"),
+        crypto_buy_url=os.getenv("CRYPTO_BUY_URL", "https://t.me/send?start=r-t3x5q-market").strip(),
         payment_test_enabled=_parse_bool(os.getenv("PAYMENT_TEST_ENABLED"), False),
         payment_test_product_slug=os.getenv("PAYMENT_TEST_PRODUCT_SLUG", "gpt-pro-1m").strip(),
         payment_test_crypto_price_cents=_parse_int(os.getenv("PAYMENT_TEST_CRYPTO_PRICE_CENTS"), 100),
