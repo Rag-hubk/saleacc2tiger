@@ -154,6 +154,7 @@ def admin_panel_keyboard() -> InlineKeyboardMarkup:
     return InlineKeyboardMarkup(
         inline_keyboard=[
             [_inline_button("Статистика", callback_data="admin_stats"), _inline_button("Продажи", callback_data="admin_sales")],
+            [_inline_button("Покупатели", callback_data="admin_buyers:0"), _inline_button("Не оплатили", callback_data="admin_abandoned:0")],
             [_inline_button("Рассылка", callback_data="admin_broadcast_menu")],
             [_inline_button("Назад", callback_data="main")],
         ]
@@ -178,10 +179,58 @@ def admin_sales_keyboard() -> InlineKeyboardMarkup:
     )
 
 
-def admin_broadcast_keyboard() -> InlineKeyboardMarkup:
+def admin_paginated_keyboard(*, prefix: str, page: int, total_pages: int) -> InlineKeyboardMarkup:
+    safe_page = max(0, page)
+    safe_total = max(1, total_pages)
+
+    rows: list[list[InlineKeyboardButton]] = []
+    nav_row: list[InlineKeyboardButton] = []
+
+    if safe_page > 0:
+        nav_row.append(_inline_button("← Назад", callback_data=f"{prefix}:{safe_page - 1}"))
+    nav_row.append(_inline_button(f"{safe_page + 1}/{safe_total}", callback_data="noop"))
+    if safe_page + 1 < safe_total:
+        nav_row.append(_inline_button("Вперёд →", callback_data=f"{prefix}:{safe_page + 1}"))
+
+    rows.append(nav_row)
+    rows.append([_inline_button("В админ-панель", callback_data="admin_panel")])
+    return InlineKeyboardMarkup(inline_keyboard=rows)
+
+
+def admin_broadcast_menu_keyboard() -> InlineKeyboardMarkup:
     return InlineKeyboardMarkup(
         inline_keyboard=[
-            [_inline_button("Отмена", callback_data="admin_broadcast_cancel")],
+            [_inline_button("Новая рассылка", callback_data="admin_broadcast_start")],
             [_inline_button("Назад", callback_data="admin_panel")],
+        ]
+    )
+
+
+def admin_broadcast_segment_keyboard() -> InlineKeyboardMarkup:
+    return InlineKeyboardMarkup(
+        inline_keyboard=[
+            [_inline_button("Все пользователи", callback_data="admin_broadcast_segment:all")],
+            [_inline_button("Не оплатили", callback_data="admin_broadcast_segment:abandoned")],
+            [_inline_button("Отмена", callback_data="admin_broadcast_cancel")],
+        ]
+    )
+
+
+def admin_broadcast_add_button_keyboard() -> InlineKeyboardMarkup:
+    return InlineKeyboardMarkup(
+        inline_keyboard=[
+            [_inline_button("Добавить Inline кнопку", callback_data="admin_broadcast_button:yes")],
+            [_inline_button("Без кнопки", callback_data="admin_broadcast_button:no")],
+            [_inline_button("Отмена", callback_data="admin_broadcast_cancel")],
+        ]
+    )
+
+
+def admin_broadcast_preview_keyboard() -> InlineKeyboardMarkup:
+    return InlineKeyboardMarkup(
+        inline_keyboard=[
+            [_inline_button("Отправить", callback_data="admin_broadcast_send")],
+            [_inline_button("Собрать заново", callback_data="admin_broadcast_start")],
+            [_inline_button("Отмена", callback_data="admin_broadcast_cancel")],
         ]
     )
