@@ -33,6 +33,11 @@ class Settings:
     cryptobot_api_token: str
     cryptobot_asset: str
 
+    payment_test_enabled: bool
+    payment_test_product_slug: str
+    payment_test_crypto_price_cents: int
+    payment_test_fiat_price_cents: int
+
     test_mode_enabled: bool
     test_mode_admin_only: bool
 
@@ -73,6 +78,18 @@ def _require_env(name: str) -> str:
     return value
 
 
+def _parse_int(value: str | None, default: int) -> int:
+    if value is None:
+        return default
+    raw = value.strip()
+    if not raw:
+        return default
+    try:
+        return int(raw)
+    except ValueError:
+        return default
+
+
 def _opt_env(name: str) -> str:
     value = os.getenv(name, "").strip()
     if value in {"...", "replace_me", "replace_with_value"}:
@@ -101,6 +118,10 @@ def get_settings() -> Settings:
         cryptobot_api_base=os.getenv("CRYPTOBOT_API_BASE", "https://pay.crypt.bot/api"),
         cryptobot_api_token=_opt_env("CRYPTOBOT_API_TOKEN"),
         cryptobot_asset=os.getenv("CRYPTOBOT_ASSET", "USDT"),
+        payment_test_enabled=_parse_bool(os.getenv("PAYMENT_TEST_ENABLED"), False),
+        payment_test_product_slug=os.getenv("PAYMENT_TEST_PRODUCT_SLUG", "gpt-pro-1m").strip(),
+        payment_test_crypto_price_cents=_parse_int(os.getenv("PAYMENT_TEST_CRYPTO_PRICE_CENTS"), 100),
+        payment_test_fiat_price_cents=_parse_int(os.getenv("PAYMENT_TEST_FIAT_PRICE_CENTS"), 200),
         test_mode_enabled=_parse_bool(os.getenv("TEST_MODE_ENABLED"), False),
         test_mode_admin_only=_parse_bool(os.getenv("TEST_MODE_ADMIN_ONLY"), True),
         export_dir=os.getenv("EXPORT_DIR", "data/storage/exports"),

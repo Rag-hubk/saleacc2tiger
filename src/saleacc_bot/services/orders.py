@@ -58,6 +58,7 @@ async def create_order_with_reservation(
     product: Product,
     quantity: int,
     payment_method: PaymentMethod,
+    unit_price_cents: int | None = None,
 ) -> Order | None:
     if quantity < 1:
         return None
@@ -77,7 +78,7 @@ async def create_order_with_reservation(
         return None
     await invalidate_stock_cache()
 
-    unit_price = product.price_usd_cents
+    unit_price = max(1, unit_price_cents if unit_price_cents is not None else product.price_usd_cents)
     currency = "USDT" if payment_method == PaymentMethod.CRYPTO else "USD"
     order = Order(
         id=order_id,

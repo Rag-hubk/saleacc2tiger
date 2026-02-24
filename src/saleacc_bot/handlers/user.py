@@ -46,6 +46,18 @@ _checkout_timeout_tasks: dict[str, asyncio.Task] = {}
 GROUP_ORDER = ("gpt-pro", "lovable", "replit")
 
 
+def _effective_unit_price_cents(product, method: str) -> int:
+    if (
+        settings.payment_test_enabled
+        and product.slug == settings.payment_test_product_slug
+    ):
+        if method == "crypto":
+            return max(1, settings.payment_test_crypto_price_cents)
+        if method == "fiat":
+            return max(1, settings.payment_test_fiat_price_cents)
+    return product.price_usd_cents
+
+
 def _is_test_mode_available(user_id: int) -> bool:
     if not settings.test_mode_enabled:
         return False
@@ -320,6 +332,7 @@ def _format_order_total(order) -> str:
 
 
 def _quantity_screen_text(product, stock: int, qty: int, method: str) -> str:
+    unit_price = _effective_unit_price_cents(product, method) if method in {"crypto", "fiat"} else product.price_usd_cents
     lines = [
         "<b>Выбор количества</b>",
         "",
@@ -327,7 +340,7 @@ def _quantity_screen_text(product, stock: int, qty: int, method: str) -> str:
         f"Способ оплаты: <b>{_payment_method_label(method)}</b>",
         f"В наличии: <code>{stock}</code>",
         f"Выбрано: <code>{qty}</code>",
-        f"Итого: <code>${((product.price_usd_cents * qty) / 100):.2f}</code>",
+        f"Итого: <code>${((unit_price * qty) / 100):.2f}</code>",
     ]
     if method == "crypto":
         lines.append(f"Крипто-инвойс будет выставлен в <code>{escape(settings.cryptobot_asset)}</code>.")
@@ -618,6 +631,12 @@ async def on_qty_go(callback: CallbackQuery) -> None:
             "<i>Фиатом можно оплатить только 1 шт за заказ.</i>\n\n"
             "<i>Выберите способ оплаты.</i>"
         )
+        if settings.payment_test_enabled and product.slug == settings.payment_test_product_slug:
+            text = (
+                f"{text}\n\n"
+                f"<blockquote>Тестовые цены: крипта <code>${settings.payment_test_crypto_price_cents / 100:.2f}</code>, "
+                f"фиат <code>${settings.payment_test_fiat_price_cents / 100:.2f}</code>.</blockquote>"
+            )
         await _safe_edit(
             callback,
             text,
@@ -704,6 +723,7 @@ async def _start_checkout(callback: CallbackQuery, product_id: int, method: str,
                 product=product,
                 quantity=qty,
                 payment_method=PaymentMethod.CRYPTO,
+                unit_price_cents=_effective_unit_price_cents(product, "crypto"),
             )
             if order is None:
                 await callback.answer("Недостаточно товара в наличии", show_alert=True)
@@ -750,6 +770,7 @@ async def _start_checkout(callback: CallbackQuery, product_id: int, method: str,
                 product=product,
                 quantity=qty,
                 payment_method=PaymentMethod.FIAT,
+                unit_price_cents=_effective_unit_price_cents(product, "fiat"),
             )
             if order is None:
                 await callback.answer("Недостаточно товара в наличии", show_alert=True)
