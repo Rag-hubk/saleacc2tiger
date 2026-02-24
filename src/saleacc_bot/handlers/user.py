@@ -1,5 +1,6 @@
 from __future__ import annotations
 from html import escape
+import logging
 
 from aiogram import F, Router
 from aiogram.exceptions import TelegramBadRequest
@@ -36,6 +37,7 @@ settings = get_settings()
 crypto_client = CryptoBotClient(settings)
 _main_menu_message_id: dict[int, int] = {}
 GROUP_ORDER = ("gpt-pro", "lovable", "replit")
+logger = logging.getLogger(__name__)
 
 
 def _effective_unit_price_cents(product, method: str) -> int:
@@ -262,14 +264,17 @@ def _quantity_screen_text(product, stock: int, qty: int, method: str) -> str:
 
 @router.message(CommandStart())
 async def on_start(message: Message) -> None:
-    async with get_session() as session:
-        await touch_user(
-            session,
-            tg_user_id=message.from_user.id,
-            tg_username=message.from_user.username,
-            first_name=message.from_user.first_name,
-            last_name=message.from_user.last_name,
-        )
+    try:
+        async with get_session() as session:
+            await touch_user(
+                session,
+                tg_user_id=message.from_user.id,
+                tg_username=message.from_user.username,
+                first_name=message.from_user.first_name,
+                last_name=message.from_user.last_name,
+            )
+    except Exception:  # noqa: BLE001
+        logger.exception("Failed to touch user in /start handler")
 
     prev_menu_id = _main_menu_message_id.get(message.from_user.id)
     if prev_menu_id:
@@ -279,7 +284,11 @@ async def on_start(message: Message) -> None:
             pass
 
     main_text, main_kb = main_menu_payload(settings, message.from_user.id)
-    sent = await message.answer(main_text, reply_markup=main_kb, parse_mode="HTML")
+    try:
+        sent = await message.answer(main_text, reply_markup=main_kb, parse_mode="HTML")
+    except TelegramBadRequest:
+        logger.exception("Failed to render main menu with HTML, falling back to plain text")
+        sent = await message.answer("Главное меню", reply_markup=main_kb)
     _main_menu_message_id[message.from_user.id] = sent.message_id
 
 

@@ -63,6 +63,13 @@ async def _safe_edit(callback: CallbackQuery, text: str, reply_markup) -> None:
             raise
 
 
+def _has_broadcast_draft(message: Message) -> bool:
+    user = message.from_user
+    if user is None:
+        return False
+    return user.id in _broadcast_drafts
+
+
 async def _load_admin_data() -> tuple[list, dict[int, int], dict[str, dict[str, int]], dict[str, int]]:
     async with get_session() as session:
         products = list(await list_active_products(session))
@@ -759,7 +766,7 @@ async def admin_broadcast(message: Message) -> None:
     )
 
 
-@router.message(F.from_user.id.in_(settings.admin_ids))
+@router.message(F.from_user.id.in_(settings.admin_ids), _has_broadcast_draft)
 async def admin_broadcast_payload(message: Message) -> None:
     if message.from_user is None:
         return
