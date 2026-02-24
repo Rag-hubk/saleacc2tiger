@@ -122,7 +122,7 @@ def tribute_checkout_keyboard(url: str, order_id: str) -> InlineKeyboardMarkup:
     return InlineKeyboardMarkup(
         inline_keyboard=[
             [_inline_button("Перейти к оплате картой", url=url)],
-            [_inline_button("Отменить оплату", callback_data=f"paycancel:{order_id}")],
+            [_inline_button("Отменить оплату", callback_data=f"paycancel:{order_id}", style="danger")],
         ]
     )
 
@@ -131,7 +131,7 @@ def cryptobot_checkout_keyboard(url: str, order_id: str) -> InlineKeyboardMarkup
     return InlineKeyboardMarkup(
         inline_keyboard=[
             [_inline_button("Оплатить криптой", url=url)],
-            [_inline_button("Отменить оплату", callback_data=f"paycancel:{order_id}")],
+            [_inline_button("Отменить оплату", callback_data=f"paycancel:{order_id}", style="danger")],
         ]
     )
 
