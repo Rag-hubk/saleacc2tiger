@@ -799,7 +799,8 @@ async def _start_checkout(callback: CallbackQuery, product_id: int, method: str,
                 "<b>Оплата фиатом</b>\n\n"
                 "1. Нажмите кнопку ниже.\n"
                 "2. Завершите оплату на стороне Tribute.\n"
-                "3. После webhook-подтверждения заказ будет выдан автоматически.",
+                "3. <b>В поле «Детали заказа» укажите:</b> <code>салют</code>\n"
+                "4. После webhook-подтверждения заказ будет выдан автоматически.",
                 tribute_checkout_keyboard(tribute_url, order.id),
             )
             if callback.message:
