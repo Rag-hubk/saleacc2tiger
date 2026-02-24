@@ -125,7 +125,15 @@ async def tribute_webhook(
         # Tribute native webhook format for payments.
         event_name = str(incoming.get("name") or "").lower()
         payload = incoming.get("payload")
-        if event_name not in {"new_digital_product", "physical_order_created"} or not isinstance(payload, dict):
+        paid_events = {
+            "new_digital_product",
+            "physical_order_created",
+            "new_donation",
+            "recurrent_donation",
+            "new_subscription",
+            "renewed_subscription",
+        }
+        if event_name not in paid_events or not isinstance(payload, dict):
             return {"result": "ignored"}
         telegram_user_id = _to_int(payload.get("telegram_user_id"))
         if telegram_user_id is None:
@@ -135,6 +143,9 @@ async def tribute_webhook(
             payload.get("purchase_id")
             or payload.get("transaction_id")
             or payload.get("order_id")
+            or payload.get("donation_request_id")
+            or payload.get("period_id")
+            or payload.get("subscription_id")
             or "tribute-webhook"
         )
 
