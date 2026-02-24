@@ -509,6 +509,10 @@ async def on_pay_method(callback: CallbackQuery) -> None:
     if method is None:
         await callback.answer("Некорректный способ оплаты", show_alert=True)
         return
+    if method == "fiat" and qty != 1:
+        await callback.answer("Фиат: доступна покупка только 1 шт.", show_alert=True)
+        await _show_quantity_selector(callback, product_id, qty=1)
+        return
     if method == "crypto" and not _is_crypto_available():
         await callback.answer("Крипто-оплата временно недоступна", show_alert=True)
         return
@@ -667,6 +671,9 @@ async def _start_checkout(callback: CallbackQuery, product_id: int, method: str,
         return
     if method == "test" and not _is_test_mode_available(callback.from_user.id):
         await callback.answer("Тестовый режим отключен", show_alert=True)
+        return
+    if method == "fiat" and qty != 1:
+        await callback.answer("Фиат: доступна покупка только 1 шт.", show_alert=True)
         return
 
     async with get_session() as session:
