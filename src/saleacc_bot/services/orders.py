@@ -130,6 +130,8 @@ async def mark_order_paid(
     order.status = OrderStatus.PAID
     order.provider_charge_id = provider_charge_id
     order.telegram_payment_charge_id = telegram_payment_charge_id
+    order.checkout_chat_id = None
+    order.checkout_message_id = None
 
     await session.commit()
     return order
@@ -151,6 +153,10 @@ async def cancel_pending_order(
     if order.status in {OrderStatus.PAID, OrderStatus.DELIVERED}:
         return order
     if order.status in {OrderStatus.CANCELLED, OrderStatus.FAILED}:
+        if order.checkout_chat_id is not None or order.checkout_message_id is not None:
+            order.checkout_chat_id = None
+            order.checkout_message_id = None
+            await session.commit()
         return order
 
     released = await get_sheets_store().release_reserved_items(
@@ -161,6 +167,8 @@ async def cancel_pending_order(
         await invalidate_stock_cache()
 
     order.status = OrderStatus.CANCELLED
+    order.checkout_chat_id = None
+    order.checkout_message_id = None
     await session.commit()
     return order
 
@@ -264,6 +272,56 @@ async def list_user_orders(
         .where(Order.tg_user_id == user_id)
         .options(selectinload(Order.product))
         .order_by(Order.created_at.desc())
+        .limit(limit)
+    )
+    return list(result)
+
+
+async def set_order_checkout_message(
+    session: AsyncSession,
+    *,
+    order_id: str,
+    chat_id: int,
+    message_id: int,
+    auto_commit: bool = True,
+) -> None:
+    order = await get_order(session, order_id)
+    if order is None:
+        return
+    order.checkout_chat_id = chat_id
+    order.checkout_message_id = message_id
+    if auto_commit:
+        await session.commit()
+
+
+async def clear_order_checkout_message(
+    session: AsyncSession,
+    *,
+    order_id: str,
+    auto_commit: bool = True,
+) -> None:
+    order = await get_order(session, order_id)
+    if order is None:
+        return
+    order.checkout_chat_id = None
+    order.checkout_message_id = None
+    if auto_commit:
+        await session.commit()
+
+
+async def list_cancelled_orders_with_checkout_message(
+    session: AsyncSession,
+    *,
+    limit: int = 100,
+) -> Sequence[Order]:
+    result = await session.scalars(
+        select(Order)
+        .where(
+            Order.status == OrderStatus.CANCELLED,
+            Order.checkout_chat_id.is_not(None),
+            Order.checkout_message_id.is_not(None),
+        )
+        .order_by(Order.updated_at.desc())
         .limit(limit)
     )
     return list(result)

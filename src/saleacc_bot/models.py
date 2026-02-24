@@ -89,6 +89,8 @@ class Order(Base):
 
     provider_charge_id: Mapped[Optional[str]] = mapped_column(String(255), nullable=True)
     telegram_payment_charge_id: Mapped[Optional[str]] = mapped_column(String(255), nullable=True)
+    checkout_chat_id: Mapped[Optional[int]] = mapped_column(BigInteger, nullable=True)
+    checkout_message_id: Mapped[Optional[int]] = mapped_column(Integer, nullable=True)
 
     created_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True),

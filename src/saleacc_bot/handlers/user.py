@@ -1,10 +1,8 @@
 from __future__ import annotations
-
-import asyncio
 from html import escape
 
-from aiogram import Bot, F, Router
-from aiogram.exceptions import TelegramBadRequest, TelegramForbiddenError
+from aiogram import F, Router
+from aiogram.exceptions import TelegramBadRequest
 from aiogram.filters import CommandStart
 from aiogram.types import CallbackQuery, FSInputFile, Message
 
@@ -15,25 +13,20 @@ from saleacc_bot.keyboards import (
     cryptobot_checkout_keyboard,
     group_details_keyboard,
     orders_keyboard,
-    payment_methods_keyboard,
     quantity_selector_keyboard,
-    tribute_checkout_keyboard,
 )
 from saleacc_bot.models import OrderStatus, PaymentMethod
 from saleacc_bot.services.catalog import get_product_by_id, list_active_products
 from saleacc_bot.services.cryptobot import CryptoBotClient
 from saleacc_bot.services.inventory import get_stock_map
 from saleacc_bot.services.orders import (
-    RESERVE_MINUTES,
-    build_tribute_url_for_product,
     cancel_pending_order,
-    cleanup_expired_reservations,
     create_order_with_reservation,
     deliver_order_csv,
     get_order,
     list_user_orders,
     mark_order_paid,
-    resolve_tribute_base_url,
+    set_order_checkout_message,
 )
 from saleacc_bot.services.users import touch_user
 from saleacc_bot.ui import is_admin, main_menu_payload
@@ -42,7 +35,6 @@ router = Router(name="user")
 settings = get_settings()
 crypto_client = CryptoBotClient(settings)
 _main_menu_message_id: dict[int, int] = {}
-_checkout_timeout_tasks: dict[str, asyncio.Task] = {}
 GROUP_ORDER = ("gpt-pro", "lovable", "replit")
 
 
@@ -53,8 +45,6 @@ def _effective_unit_price_cents(product, method: str) -> int:
     ):
         if method == "crypto":
             return max(1, settings.payment_test_crypto_price_cents)
-        if method == "fiat":
-            return max(1, settings.payment_test_fiat_price_cents)
     return product.price_usd_cents
 
 
@@ -68,25 +58,6 @@ def _is_test_mode_available(user_id: int) -> bool:
 
 def _is_crypto_available() -> bool:
     return settings.cryptobot_enabled
-
-
-def _is_fiat_available_for_product(product_slug: str) -> bool:
-    if not settings.tribute_enabled:
-        return False
-    return (
-        resolve_tribute_base_url(
-            product_slug=product_slug,
-            fallback_base_url=settings.tribute_base_url,
-            tribute_link_gpt_pro_1m=settings.tribute_link_gpt_pro_1m,
-            tribute_link_gpt_pro_3m=settings.tribute_link_gpt_pro_3m,
-            tribute_link_lovable_100=settings.tribute_link_lovable_100,
-            tribute_link_lovable_200=settings.tribute_link_lovable_200,
-            tribute_link_lovable_300=settings.tribute_link_lovable_300,
-            tribute_link_replit_core=settings.tribute_link_replit_core,
-            tribute_link_replit_team=settings.tribute_link_replit_team,
-        )
-        is not None
-    )
 
 
 async def _safe_delete_user_message(message: Message) -> None:
@@ -104,68 +75,6 @@ async def _safe_edit(callback: CallbackQuery, text: str, reply_markup) -> None:
     except TelegramBadRequest as exc:
         if "message is not modified" not in str(exc):
             raise
-
-
-def _schedule_checkout_timeout(
-    *,
-    bot: Bot,
-    order_id: str,
-    chat_id: int,
-    message_id: int,
-    user_id: int,
-) -> None:
-    existing = _checkout_timeout_tasks.get(order_id)
-    if existing and not existing.done():
-        existing.cancel()
-
-    task = asyncio.create_task(
-        _checkout_timeout_job(
-            bot=bot,
-            order_id=order_id,
-            chat_id=chat_id,
-            message_id=message_id,
-            user_id=user_id,
-        )
-    )
-    _checkout_timeout_tasks[order_id] = task
-
-
-async def _checkout_timeout_job(
-    *,
-    bot: Bot,
-    order_id: str,
-    chat_id: int,
-    message_id: int,
-    user_id: int,
-) -> None:
-    try:
-        await asyncio.sleep((RESERVE_MINUTES * 60) + 5)
-
-        async with get_session() as session:
-            await cleanup_expired_reservations(session)
-            order = await get_order(session, order_id)
-            if order is None or order.status != OrderStatus.CANCELLED:
-                return
-
-        try:
-            await bot.delete_message(chat_id=chat_id, message_id=message_id)
-        except (TelegramBadRequest, TelegramForbiddenError):
-            pass
-
-        main_text, main_kb = main_menu_payload(settings, user_id)
-        sent = await bot.send_message(
-            chat_id=chat_id,
-            text=main_text,
-            reply_markup=main_kb,
-            parse_mode="HTML",
-        )
-        _main_menu_message_id[user_id] = sent.message_id
-    except asyncio.CancelledError:
-        raise
-    except Exception:
-        return
-    finally:
-        _checkout_timeout_tasks.pop(order_id, None)
 
 
 async def _load_catalog() -> tuple[list, dict[int, int]]:
@@ -208,7 +117,7 @@ def _catalog_text(products: list, stock_map: dict[int, int]) -> str:
         lines.append(f"В наличии: <b>{total_stock}</b>")
         lines.append("")
     lines.append("<i>Нажмите на сервис, чтобы выбрать подходящий вариант.</i>")
-    lines.append("<blockquote>Оплата возможна в любой валюте, включая рубли.</blockquote>")
+    lines.append("<blockquote>Оплата только криптовалютой через Crypto Bot.</blockquote>")
     return "\n".join(lines)
 
 
@@ -295,7 +204,7 @@ def _group_variants(group: str, products: list, stock_map: dict[int, int]) -> li
 
 def _normalize_payment_method(method: str) -> str | None:
     normalized = method.strip().lower()
-    if normalized in {"crypto", "fiat", "test", "pick"}:
+    if normalized in {"crypto", "test", "pick"}:
         return normalized
     return None
 
@@ -303,8 +212,6 @@ def _normalize_payment_method(method: str) -> str | None:
 def _payment_method_label(method: str) -> str:
     if method == "crypto":
         return "Криптой"
-    if method == "fiat":
-        return "Фиат"
     if method == "test":
         return "Тестовый режим"
     if method == "pick":
@@ -332,7 +239,7 @@ def _format_order_total(order) -> str:
 
 
 def _quantity_screen_text(product, stock: int, qty: int, method: str) -> str:
-    unit_price = _effective_unit_price_cents(product, method) if method in {"crypto", "fiat"} else product.price_usd_cents
+    unit_price = _effective_unit_price_cents(product, method) if method == "crypto" else product.price_usd_cents
     lines = [
         "<b>Выбор количества</b>",
         "",
@@ -347,7 +254,7 @@ def _quantity_screen_text(product, stock: int, qty: int, method: str) -> str:
     lines.append("")
     if method == "pick":
         lines.append("<i>Выберите количество и нажмите «Продолжить к оплате».</i>")
-        lines.append("<i>Фиат доступен только для 1 шт за один заказ. Для 2+ используйте крипто.</i>")
+        lines.append("<i>После подтверждения будет создан крипто-инвойс.</i>")
     else:
         lines.append("<i>Используйте кнопки +/- и нажмите «Продолжить».</i>")
     return "\n".join(lines)
@@ -523,9 +430,8 @@ async def on_pay_method(callback: CallbackQuery) -> None:
     if method is None:
         await callback.answer("Некорректный способ оплаты", show_alert=True)
         return
-    if method == "fiat" and qty != 1:
-        await callback.answer("Фиат: доступна покупка только 1 шт.", show_alert=True)
-        await _show_quantity_selector(callback, product_id, qty=1)
+    if method not in {"crypto", "test"}:
+        await callback.answer("Доступна только крипто-оплата", show_alert=True)
         return
     if method == "crypto" and not _is_crypto_available():
         await callback.answer("Крипто-оплата временно недоступна", show_alert=True)
@@ -565,9 +471,6 @@ async def on_qty_set(callback: CallbackQuery) -> None:
 
     if product is None or not product.is_active:
         await callback.answer("Товар недоступен", show_alert=True)
-        return
-    if method == "fiat" and not _is_fiat_available_for_product(product.slug):
-        await callback.answer("Фиат-оплата временно недоступна", show_alert=True)
         return
 
     stock = stock_map.get(product_id, 0)
@@ -621,34 +524,7 @@ async def on_qty_go(callback: CallbackQuery) -> None:
             return
 
         normalized_qty = max(1, min(qty, stock))
-        fiat_available = _is_fiat_available_for_product(product.slug) and normalized_qty == 1
-        text = (
-            "<b>Выбор способа оплаты</b>\n\n"
-            f"Товар: <b>{escape(product.title)}</b>\n"
-            f"В наличии: <code>{stock}</code>\n"
-            f"Выбрано: <code>{normalized_qty}</code>\n\n"
-            "<i>Криптой можно оплатить любое количество.</i>\n"
-            "<i>Фиатом можно оплатить только 1 шт за заказ.</i>\n\n"
-            "<i>Выберите способ оплаты.</i>"
-        )
-        if settings.payment_test_enabled and product.slug == settings.payment_test_product_slug:
-            text = (
-                f"{text}\n\n"
-                f"<blockquote>Тестовые цены: крипта <code>${settings.payment_test_crypto_price_cents / 100:.2f}</code>, "
-                f"фиат <code>${settings.payment_test_fiat_price_cents / 100:.2f}</code>.</blockquote>"
-            )
-        await _safe_edit(
-            callback,
-            text,
-            payment_methods_keyboard(
-                product_id,
-                normalized_qty,
-                cryptobot_enabled=_is_crypto_available(),
-                tribute_enabled=fiat_available,
-                test_mode_enabled=_is_test_mode_available(callback.from_user.id),
-            ),
-        )
-        await callback.answer()
+        await _start_checkout(callback, product_id, "crypto", normalized_qty)
         return
 
     await _start_checkout(callback, product_id, method, qty)
@@ -678,10 +554,6 @@ async def on_pay_cancel(callback: CallbackQuery) -> None:
             user_id=callback.from_user.id,
         )
 
-    task = _checkout_timeout_tasks.pop(order_id, None)
-    if task and not task.done():
-        task.cancel()
-
     await _safe_edit(callback, *main_menu_payload(settings, callback.from_user.id))
     if callback.message:
         _main_menu_message_id[callback.from_user.id] = callback.message.message_id
@@ -692,11 +564,11 @@ async def _start_checkout(callback: CallbackQuery, product_id: int, method: str,
     if method == "crypto" and not _is_crypto_available():
         await callback.answer("Крипто-оплата временно недоступна", show_alert=True)
         return
+    if method not in {"crypto", "test"}:
+        await callback.answer("Доступна только крипто-оплата", show_alert=True)
+        return
     if method == "test" and not _is_test_mode_available(callback.from_user.id):
         await callback.answer("Тестовый режим отключен", show_alert=True)
-        return
-    if method == "fiat" and qty != 1:
-        await callback.answer("Фиат: доступна покупка только 1 шт.", show_alert=True)
         return
 
     async with get_session() as session:
@@ -705,9 +577,6 @@ async def _start_checkout(callback: CallbackQuery, product_id: int, method: str,
 
         if product is None or not product.is_active:
             await callback.answer("Товар недоступен", show_alert=True)
-            return
-        if method == "fiat" and not _is_fiat_available_for_product(product.slug):
-            await callback.answer("Фиат-оплата временно недоступна", show_alert=True)
             return
 
         stock = stock_map.get(product_id, 0)
@@ -752,64 +621,11 @@ async def _start_checkout(callback: CallbackQuery, product_id: int, method: str,
                 cryptobot_checkout_keyboard(invoice.pay_url, order.id),
             )
             if callback.message:
-                _schedule_checkout_timeout(
-                    bot=callback.bot,
+                await set_order_checkout_message(
+                    session,
                     order_id=order.id,
                     chat_id=callback.message.chat.id,
                     message_id=callback.message.message_id,
-                    user_id=callback.from_user.id,
-                )
-            await callback.answer()
-            return
-
-        if method == "fiat":
-            order = await create_order_with_reservation(
-                session,
-                user_id=callback.from_user.id,
-                username=callback.from_user.username,
-                product=product,
-                quantity=qty,
-                payment_method=PaymentMethod.FIAT,
-                unit_price_cents=_effective_unit_price_cents(product, "fiat"),
-            )
-            if order is None:
-                await callback.answer("Недостаточно товара в наличии", show_alert=True)
-                return
-
-            tribute_url = build_tribute_url_for_product(
-                product_slug=product.slug,
-                fallback_base_url=settings.tribute_base_url,
-                tribute_link_gpt_pro_1m=settings.tribute_link_gpt_pro_1m,
-                tribute_link_gpt_pro_3m=settings.tribute_link_gpt_pro_3m,
-                tribute_link_lovable_100=settings.tribute_link_lovable_100,
-                tribute_link_lovable_200=settings.tribute_link_lovable_200,
-                tribute_link_lovable_300=settings.tribute_link_lovable_300,
-                tribute_link_replit_core=settings.tribute_link_replit_core,
-                tribute_link_replit_team=settings.tribute_link_replit_team,
-                order_id=order.id,
-                user_id=callback.from_user.id,
-                amount_usd_cents=order.total_price,
-                quantity=qty,
-            )
-            if not tribute_url:
-                await callback.answer("Фиат-ссылка не настроена", show_alert=True)
-                return
-            await _safe_edit(
-                callback,
-                "<b>Оплата фиатом</b>\n\n"
-                "1. Нажмите кнопку ниже.\n"
-                "2. Завершите оплату на стороне Tribute.\n"
-                "3. <b>В поле «Детали заказа» укажите:</b> <code>салют</code>\n"
-                "4. После webhook-подтверждения заказ будет выдан автоматически.",
-                tribute_checkout_keyboard(tribute_url, order.id),
-            )
-            if callback.message:
-                _schedule_checkout_timeout(
-                    bot=callback.bot,
-                    order_id=order.id,
-                    chat_id=callback.message.chat.id,
-                    message_id=callback.message.message_id,
-                    user_id=callback.from_user.id,
                 )
             await callback.answer()
             return

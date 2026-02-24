@@ -73,8 +73,6 @@ def payment_methods_keyboard(
     rows: list[list[InlineKeyboardButton]] = []
     if cryptobot_enabled:
         rows.append([_inline_button("Криптой", callback_data=f"paymethod:{product_id}:crypto:{qty}")])
-    if tribute_enabled:
-        rows.append([_inline_button("Фиат (1 шт)", callback_data=f"paymethod:{product_id}:fiat:{qty}")])
     if test_mode_enabled:
         rows.append([_inline_button("Тест: без оплаты", callback_data=f"paymethod:{product_id}:test:{qty}")])
     rows.append([_inline_button("Назад", callback_data=f"qtyset:{product_id}:pick:{qty}")])

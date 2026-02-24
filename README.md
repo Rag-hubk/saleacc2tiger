@@ -4,7 +4,7 @@ Telegram marketplace bot with Google Sheets inventory.
 
 ## What is implemented
 
-- Inline UX flow (`/start` -> каталог -> сервис -> вариант тарифа -> количество -> способ оплаты -> checkout).
+- Inline UX flow (`/start` -> каталог -> сервис -> вариант тарифа -> количество -> crypto checkout).
 - Stock is read from Google Sheet (`inventory` worksheet).
 - On successful payment, bot marks rows as sold in Sheet and sends CSV to user.
 - Sales log is written into `sales` worksheet.
@@ -25,20 +25,10 @@ Key variables:
 - `GOOGLE_SERVICE_ACCOUNT_FILE`
 - `GOOGLE_INVENTORY_WORKSHEET` (default `inventory`)
 - `GOOGLE_SALES_WORKSHEET` (default `sales`)
-- `TRIBUTE_ENABLED`
-- `TRIBUTE_WEBHOOK_SECRET`
 - `CRYPTOBOT_ENABLED`
 - `CRYPTOBOT_API_BASE`
 - `CRYPTOBOT_API_TOKEN`
 - `CRYPTOBOT_ASSET`
-- `TRIBUTE_LINK_GPT_PRO_1M`
-- `TRIBUTE_LINK_GPT_PRO_3M`
-- `TRIBUTE_LINK_LOVABLE_100`
-- `TRIBUTE_LINK_LOVABLE_200`
-- `TRIBUTE_LINK_LOVABLE_300`
-- `TRIBUTE_LINK_REPLIT_CORE`
-- `TRIBUTE_LINK_REPLIT_TEAM`
-- `TRIBUTE_BASE_URL` (optional fallback)
 - `TEST_MODE_ENABLED` (`true/false`) - allow issue without real payment
 - `TEST_MODE_ADMIN_ONLY` (`true/false`) - show test button only for admins
 
@@ -124,8 +114,6 @@ item_id=gpt1m-001, product=gpt-pro-1m, status=free, access_login=user@example.co
 ### Payment channels
 
 - `Криптой` -> Crypto Bot API (`/createInvoice`) + webhook `/webhooks/cryptobot`
-- `Фиат` -> Tribute link per SKU (`TRIBUTE_LINK_GPT_PRO_1M`, `TRIBUTE_LINK_GPT_PRO_3M`, `TRIBUTE_LINK_LOVABLE_100`, `TRIBUTE_LINK_LOVABLE_200`, `TRIBUTE_LINK_LOVABLE_300`, `TRIBUTE_LINK_REPLIT_CORE`, `TRIBUTE_LINK_REPLIT_TEAM`)
-  - Если ссылка для конкретного SKU не задана, используется `TRIBUTE_BASE_URL` (если заполнен).
 
 ## CSV import helper
 
@@ -170,7 +158,7 @@ TEST_MODE_ADMIN_ONLY=true
 Then in product checkout screen admin will see button `Тест: без оплаты`.
 It creates order, marks paid, updates Sheet and sends CSV immediately.
 
-## Run Tribute webhook app
+## Run webhook app
 
 ```bash
 PYTHONPATH=src uvicorn saleacc_bot.webhook_app:app --host 0.0.0.0 --port 8000
@@ -178,7 +166,6 @@ PYTHONPATH=src uvicorn saleacc_bot.webhook_app:app --host 0.0.0.0 --port 8000
 
 Endpoints:
 
-- `POST /webhooks/tribute`
 - `POST /webhooks/cryptobot`
 
 ## VPS Deployment
@@ -200,7 +187,7 @@ Docker files:
 Use two Railway services from one repository:
 
 - `bot` service (Telegram polling)
-- `webhook` service (public HTTPS endpoint for CryptoBot/Tribute)
+- `webhook` service (public HTTPS endpoint for CryptoBot)
 
 ### 1. Create shared Postgres
 
@@ -216,12 +203,9 @@ Add PostgreSQL in Railway project and use it for both services.
   - `SUPPORT_URL`
   - `GOOGLE_SHEET_ID`
   - `GOOGLE_SERVICE_ACCOUNT_JSON_B64` (base64 of Google SA JSON)
-  - `TRIBUTE_ENABLED`
-  - `TRIBUTE_WEBHOOK_SECRET`
   - `CRYPTOBOT_ENABLED`
   - `CRYPTOBOT_API_TOKEN`
   - `CRYPTOBOT_ASSET`
-  - all `TRIBUTE_LINK_*` variables
   - `TEST_MODE_ENABLED`
   - `TEST_MODE_ADMIN_ONLY`
 

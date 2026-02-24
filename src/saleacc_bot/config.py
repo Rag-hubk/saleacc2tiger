@@ -36,7 +36,6 @@ class Settings:
     payment_test_enabled: bool
     payment_test_product_slug: str
     payment_test_crypto_price_cents: int
-    payment_test_fiat_price_cents: int
 
     test_mode_enabled: bool
     test_mode_admin_only: bool
@@ -121,7 +120,6 @@ def get_settings() -> Settings:
         payment_test_enabled=_parse_bool(os.getenv("PAYMENT_TEST_ENABLED"), False),
         payment_test_product_slug=os.getenv("PAYMENT_TEST_PRODUCT_SLUG", "gpt-pro-1m").strip(),
         payment_test_crypto_price_cents=_parse_int(os.getenv("PAYMENT_TEST_CRYPTO_PRICE_CENTS"), 100),
-        payment_test_fiat_price_cents=_parse_int(os.getenv("PAYMENT_TEST_FIAT_PRICE_CENTS"), 200),
         test_mode_enabled=_parse_bool(os.getenv("TEST_MODE_ENABLED"), False),
         test_mode_admin_only=_parse_bool(os.getenv("TEST_MODE_ADMIN_ONLY"), True),
         export_dir=os.getenv("EXPORT_DIR", "data/storage/exports"),

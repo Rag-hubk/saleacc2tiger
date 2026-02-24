@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import asyncio
+import contextlib
 from pathlib import Path
 
 from aiogram import Bot, Dispatcher
@@ -10,6 +11,7 @@ from saleacc_bot.db import get_session, init_db
 from saleacc_bot.handlers import admin, payments, user
 from saleacc_bot.services.catalog import seed_default_products
 from saleacc_bot.services.inventory import get_sheets_store
+from saleacc_bot.services.reaper import reservation_reaper_loop
 
 
 async def start_polling() -> None:
@@ -28,8 +30,14 @@ async def start_polling() -> None:
     dp.include_router(admin.router)
     dp.include_router(payments.router)
     dp.include_router(user.router)
-
-    await dp.start_polling(bot)
+    reaper_task = asyncio.create_task(reservation_reaper_loop(bot))
+    try:
+        await dp.start_polling(bot)
+    finally:
+        reaper_task.cancel()
+        with contextlib.suppress(asyncio.CancelledError):
+            await reaper_task
+        await bot.session.close()
 
 
 def run() -> None:

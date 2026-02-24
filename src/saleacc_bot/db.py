@@ -50,6 +50,7 @@ async def init_db() -> None:
     async with engine.begin() as conn:
         await conn.run_sync(Base.metadata.create_all)
         await _migrate_tg_id_columns_to_bigint(conn)
+        await _migrate_order_checkout_columns(conn)
 
 
 async def _migrate_tg_id_columns_to_bigint(conn: AsyncConnection) -> None:
@@ -95,3 +96,45 @@ async def _migrate_tg_id_columns_to_bigint(conn: AsyncConnection) -> None:
         $$;
         """
     )
+
+
+async def _migrate_order_checkout_columns(conn: AsyncConnection) -> None:
+    if conn.dialect.name == "postgresql":
+        await conn.exec_driver_sql(
+            """
+            DO $$
+            BEGIN
+                IF NOT EXISTS (
+                    SELECT 1
+                    FROM information_schema.columns
+                    WHERE table_schema = 'public'
+                      AND table_name = 'orders'
+                      AND column_name = 'checkout_chat_id'
+                ) THEN
+                    ALTER TABLE public.orders ADD COLUMN checkout_chat_id BIGINT NULL;
+                END IF;
+
+                IF NOT EXISTS (
+                    SELECT 1
+                    FROM information_schema.columns
+                    WHERE table_schema = 'public'
+                      AND table_name = 'orders'
+                      AND column_name = 'checkout_message_id'
+                ) THEN
+                    ALTER TABLE public.orders ADD COLUMN checkout_message_id INTEGER NULL;
+                END IF;
+            END
+            $$;
+            """
+        )
+        return
+
+    if conn.dialect.name == "sqlite":
+        result = await conn.exec_driver_sql("PRAGMA table_info(orders);")
+        rows = result.fetchall()
+        existing_columns = {str(row[1]) for row in rows}
+
+        if "checkout_chat_id" not in existing_columns:
+            await conn.exec_driver_sql("ALTER TABLE orders ADD COLUMN checkout_chat_id BIGINT;")
+        if "checkout_message_id" not in existing_columns:
+            await conn.exec_driver_sql("ALTER TABLE orders ADD COLUMN checkout_message_id INTEGER;")
