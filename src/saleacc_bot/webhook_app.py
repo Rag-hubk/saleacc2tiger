@@ -122,16 +122,21 @@ async def tribute_webhook(
         order_id = event.order_id
         provider_charge_id = event.payment_id or "tribute-webhook"
     else:
-        # Tribute native webhook format for digital product payments.
+        # Tribute native webhook format for payments.
         event_name = str(incoming.get("name") or "").lower()
         payload = incoming.get("payload")
-        if event_name != "new_digital_product" or not isinstance(payload, dict):
+        if event_name not in {"new_digital_product", "physical_order_created"} or not isinstance(payload, dict):
             return {"result": "ignored"}
         telegram_user_id = _to_int(payload.get("telegram_user_id"))
         if telegram_user_id is None:
             return {"result": "ignored"}
-        amount_cents = _to_int(payload.get("amount"))
-        provider_charge_id = str(payload.get("purchase_id") or payload.get("transaction_id") or "tribute-webhook")
+        amount_cents = _to_int(payload.get("amount")) or _to_int(payload.get("total"))
+        provider_charge_id = str(
+            payload.get("purchase_id")
+            or payload.get("transaction_id")
+            or payload.get("order_id")
+            or "tribute-webhook"
+        )
 
     async with get_session() as session:
         if order_id is None:
