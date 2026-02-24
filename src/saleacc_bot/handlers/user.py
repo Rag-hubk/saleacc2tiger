@@ -334,6 +334,7 @@ def _quantity_screen_text(product, stock: int, qty: int, method: str) -> str:
     lines.append("")
     if method == "pick":
         lines.append("<i>Выберите количество и нажмите «Продолжить к оплате».</i>")
+        lines.append("<i>Фиат доступен только для 1 шт за один заказ. Для 2+ используйте крипто.</i>")
     else:
         lines.append("<i>Используйте кнопки +/- и нажмите «Продолжить».</i>")
     return "\n".join(lines)
@@ -607,12 +608,15 @@ async def on_qty_go(callback: CallbackQuery) -> None:
             return
 
         normalized_qty = max(1, min(qty, stock))
+        fiat_available = _is_fiat_available_for_product(product.slug) and normalized_qty == 1
         text = (
             "<b>Выбор способа оплаты</b>\n\n"
             f"Товар: <b>{escape(product.title)}</b>\n"
             f"В наличии: <code>{stock}</code>\n"
             f"Выбрано: <code>{normalized_qty}</code>\n\n"
-            "<i>Выберите валюту/способ оплаты.</i>"
+            "<i>Криптой можно оплатить любое количество.</i>\n"
+            "<i>Фиатом можно оплатить только 1 шт за заказ.</i>\n\n"
+            "<i>Выберите способ оплаты.</i>"
         )
         await _safe_edit(
             callback,
@@ -621,7 +625,7 @@ async def on_qty_go(callback: CallbackQuery) -> None:
                 product_id,
                 normalized_qty,
                 cryptobot_enabled=_is_crypto_available(),
-                tribute_enabled=_is_fiat_available_for_product(product.slug),
+                tribute_enabled=fiat_available,
                 test_mode_enabled=_is_test_mode_available(callback.from_user.id),
             ),
         )
