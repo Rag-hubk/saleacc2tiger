@@ -32,6 +32,7 @@ INVENTORY_HEADERS = [
     "reserved_by_tg_id",
     "reserved_until",
     "reserved_at",
+    "supplier_purchased_at",
 ]
 
 SALES_HEADERS = [

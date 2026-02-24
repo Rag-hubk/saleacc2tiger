@@ -47,7 +47,7 @@ PYTHONPATH=src python3 scripts/init_google_sheet.py
 This creates/updates worksheets:
 
 - `inventory` with headers:
-  - `item_id,product,status,access_login,access_secret,note,sold_to_tg_id,sold_to_username,sold_at,order_id,payment_method,extra_instruction,reserved_for_order_id,reserved_by_tg_id,reserved_until,reserved_at`
+  - `item_id,product,status,access_login,access_secret,note,sold_to_tg_id,sold_to_username,sold_at,order_id,payment_method,extra_instruction,reserved_for_order_id,reserved_by_tg_id,reserved_until,reserved_at,supplier_purchased_at`
 - `sales` with headers:
   - `sale_id,order_id,product,quantity,buyer_tg_id,buyer_username,payment_method,total_price,currency,delivered_item_ids,sold_at`
 
@@ -64,6 +64,7 @@ In worksheet `inventory`:
   - `replit-core`
   - `replit-team`
 - `status`: `free`
+- `supplier_purchased_at`: optional date when you bought this account from supplier (e.g. `2026-02-24`)
 - `access_login`: login/email
 - `access_secret`: secret/password/token
 - `note`: optional
@@ -88,6 +89,7 @@ item_id=gpt1m-001, product=gpt-pro-1m, status=free, access_login=user@example.co
 
 - `note` -> комментарий
 - `item_id` -> любой уникальный ID (если пусто, лучше все равно проставлять вручную)
+- `supplier_purchased_at` -> когда вы закупили этот аккаунт (рекомендуемый формат: `YYYY-MM-DD`)
 - `extra_instruction` -> доп. инструкция для конкретного аккаунта (в CSV попадет только если заполнена хотя бы у одного выданного аккаунта)
 
 Остальные колонки бот заполнит сам после продажи:
@@ -124,8 +126,8 @@ PYTHONPATH=src python3 scripts/load_inventory.py --product gpt-pro-1m --file ./i
 
 CSV headers supported:
 
-- `access_login,access_secret,note,extra_instruction`
-- or `email,password,note,instruction`
+- `access_login,access_secret,note,extra_instruction,supplier_purchased_at`
+- or `email,password,note,instruction,purchased_at`
 
 ## Run bot
 

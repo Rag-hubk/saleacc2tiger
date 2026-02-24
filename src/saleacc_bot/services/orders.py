@@ -209,6 +209,7 @@ async def deliver_order_csv(
 
     excluded = {
         "status",
+        "supplier_purchased_at",
         "sold_to_tg_id",
         "sold_to_username",
         "sold_at",

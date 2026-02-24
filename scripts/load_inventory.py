@@ -50,6 +50,7 @@ def main() -> None:
         prepared["item_id"] = item_id
         prepared["product"] = args.product
         prepared["status"] = "free"
+        prepared["supplier_purchased_at"] = row.get("supplier_purchased_at", row.get("purchased_at", ""))
         prepared["access_login"] = row.get("access_login", row.get("email", ""))
         prepared["access_secret"] = row.get("access_secret", row.get("password", ""))
         prepared["note"] = row.get("note", "")
