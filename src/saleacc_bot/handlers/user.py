@@ -36,7 +36,7 @@ crypto_client = CryptoBotClient(settings)
 _main_menu_message_id: dict[int, int] = {}
 GROUP_ORDER = ("gpt-pro", "lovable", "replit")
 logger = logging.getLogger(__name__)
-PUBLIC_OFFER_URL = "https://telegra.ph/Publicchnaya-oferta-i-pravila-ispolzovaniya-servisa-Vibestack-02-24"
+PUBLIC_OFFER_URL = "https://telegra.ph/Publichnaya-oferta-i-pravila-ispolzovaniya-servisa-Vibestack-02-24"
 
 
 def _is_crypto_available() -> bool:
