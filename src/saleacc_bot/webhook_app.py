@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import hashlib
 import hmac
+import json
 from typing import Any
 
 from aiogram import Bot
@@ -18,7 +19,11 @@ from saleacc_bot.services.cryptobot import (
     verify_cryptobot_signature,
 )
 from saleacc_bot.services.inventory import get_sheets_store
-from saleacc_bot.services.orders import deliver_order_csv, mark_order_paid
+from saleacc_bot.services.orders import (
+    deliver_order_csv,
+    find_pending_fiat_order_for_tribute,
+    mark_order_paid,
+)
 from saleacc_bot.ui import main_menu_payload
 
 app = FastAPI(title="saleacc payment webhooks")
@@ -29,6 +34,15 @@ class TributeEvent(BaseModel):
     order_id: str
     status: str
     payment_id: str | None = None
+
+
+def _to_int(value: Any) -> int | None:
+    try:
+        if value is None:
+            return None
+        return int(str(value).strip())
+    except (TypeError, ValueError):
+        return None
 
 
 def _verify_tribute_signature(body: bytes, signature: str | None) -> bool:
@@ -88,18 +102,52 @@ async def tribute_webhook(
         raise HTTPException(status_code=401, detail="invalid signature")
 
     try:
-        event = TributeEvent.model_validate_json(body)
-    except ValidationError as exc:
-        raise HTTPException(status_code=422, detail=str(exc)) from exc
+        incoming: dict[str, Any] = json.loads(body.decode("utf-8"))
+    except Exception as exc:  # noqa: BLE001
+        raise HTTPException(status_code=422, detail=f"invalid json: {exc}") from exc
 
-    if event.status.lower() not in {"paid", "succeeded"}:
-        return {"result": "ignored"}
+    order_id: str | None = None
+    provider_charge_id: str | None = None
+    telegram_user_id: int | None = None
+    amount_cents: int | None = None
+
+    # Legacy format.
+    if "order_id" in incoming:
+        try:
+            event = TributeEvent.model_validate(incoming)
+        except ValidationError as exc:
+            raise HTTPException(status_code=422, detail=str(exc)) from exc
+        if event.status.lower() not in {"paid", "succeeded"}:
+            return {"result": "ignored"}
+        order_id = event.order_id
+        provider_charge_id = event.payment_id or "tribute-webhook"
+    else:
+        # Tribute native webhook format for digital product payments.
+        event_name = str(incoming.get("name") or "").lower()
+        payload = incoming.get("payload")
+        if event_name != "new_digital_product" or not isinstance(payload, dict):
+            return {"result": "ignored"}
+        telegram_user_id = _to_int(payload.get("telegram_user_id"))
+        if telegram_user_id is None:
+            return {"result": "ignored"}
+        amount_cents = _to_int(payload.get("amount"))
+        provider_charge_id = str(payload.get("purchase_id") or payload.get("transaction_id") or "tribute-webhook")
 
     async with get_session() as session:
+        if order_id is None:
+            pending = await find_pending_fiat_order_for_tribute(
+                session,
+                tg_user_id=telegram_user_id,  # type: ignore[arg-type]
+                amount_cents=amount_cents,
+            )
+            if pending is None:
+                raise HTTPException(status_code=404, detail="pending fiat order not found")
+            order_id = pending.id
+
         order = await mark_order_paid(
             session,
-            order_id=event.order_id,
-            provider_charge_id=event.payment_id or "tribute-webhook",
+            order_id=order_id,
+            provider_charge_id=provider_charge_id,
             telegram_payment_charge_id=None,
         )
         if order is None:

@@ -269,6 +269,32 @@ async def list_user_orders(
     return list(result)
 
 
+async def find_pending_fiat_order_for_tribute(
+    session: AsyncSession,
+    *,
+    tg_user_id: int,
+    amount_cents: int | None = None,
+) -> Order | None:
+    base_stmt = (
+        select(Order)
+        .where(
+            Order.tg_user_id == tg_user_id,
+            Order.payment_method == PaymentMethod.FIAT,
+            Order.status.in_([OrderStatus.CREATED, OrderStatus.PENDING_PAYMENT]),
+        )
+        .options(selectinload(Order.product))
+    )
+
+    if amount_cents is not None and amount_cents > 0:
+        order_by_amount = await session.scalar(
+            base_stmt.where(Order.total_price == amount_cents).order_by(Order.created_at.desc()).limit(1)
+        )
+        if order_by_amount is not None:
+            return order_by_amount
+
+    return await session.scalar(base_stmt.order_by(Order.created_at.desc()).limit(1))
+
+
 def build_tribute_url(
     *,
     base_url: str,
