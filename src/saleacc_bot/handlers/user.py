@@ -306,7 +306,7 @@ async def on_catalog_callback(callback: CallbackQuery) -> None:
     await _safe_edit(
         callback,
         _catalog_text(products, stock_map),
-        catalog_keyboard(products, stock_map),
+        catalog_keyboard(products, stock_map, buy_crypto_url=settings.crypto_buy_url),
     )
     await callback.answer()
 
@@ -371,7 +371,7 @@ async def _show_group_details(callback: CallbackQuery, group: str) -> None:
     await _safe_edit(
         callback,
         _group_details_text(group, products, stock_map),
-        group_details_keyboard(variants),
+        group_details_keyboard(variants, buy_crypto_url=settings.crypto_buy_url),
     )
 
 
@@ -399,6 +399,7 @@ async def _show_quantity_selector(callback: CallbackQuery, product_id: int, *, q
             normalized_qty,
             min_qty=1,
             max_qty=stock,
+            buy_crypto_url=settings.crypto_buy_url,
         ),
     )
 
@@ -497,6 +498,7 @@ async def on_qty_set(callback: CallbackQuery) -> None:
             normalized_qty,
             min_qty=1,
             max_qty=stock,
+            buy_crypto_url=settings.crypto_buy_url,
         ),
     )
     await callback.answer()
@@ -627,11 +629,7 @@ async def _start_checkout(callback: CallbackQuery, product_id: int, method: str,
                 "1. Нажмите кнопку ниже.\n"
                 "2. Оплатите инвойс в Crypto Bot.\n"
                 "3. После webhook-подтверждения заказ будет выдан автоматически.",
-                cryptobot_checkout_keyboard(
-                    invoice.pay_url,
-                    order.id,
-                    buy_crypto_url=settings.crypto_buy_url,
-                ),
+                cryptobot_checkout_keyboard(invoice.pay_url, order.id),
             )
             if callback.message:
                 await set_order_checkout_message(

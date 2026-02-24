@@ -39,7 +39,12 @@ def main_menu_keyboard(*, is_admin: bool, support_url: str) -> InlineKeyboardMar
     return InlineKeyboardMarkup(inline_keyboard=rows)
 
 
-def catalog_keyboard(_products: Iterable[Product], _stock_by_product: dict[int, int]) -> InlineKeyboardMarkup:
+def catalog_keyboard(
+    _products: Iterable[Product],
+    _stock_by_product: dict[int, int],
+    *,
+    buy_crypto_url: str | None = None,
+) -> InlineKeyboardMarkup:
     rows: list[list[InlineKeyboardButton]] = [
         [
             _inline_button("𖣔 GPT Pro", callback_data="group:gpt-pro"),
@@ -47,17 +52,25 @@ def catalog_keyboard(_products: Iterable[Product], _stock_by_product: dict[int, 
             _inline_button("▚ Replit", callback_data="group:replit"),
         ],
     ]
+    if buy_crypto_url:
+        rows.append([_inline_button("Удобно купить крипту тут", url=buy_crypto_url)])
     rows.append([_inline_button("Назад", callback_data="main")])
     return InlineKeyboardMarkup(inline_keyboard=rows)
 
 
-def group_details_keyboard(variants: list[tuple[int, str, int, int]]) -> InlineKeyboardMarkup:
+def group_details_keyboard(
+    variants: list[tuple[int, str, int, int]],
+    *,
+    buy_crypto_url: str | None = None,
+) -> InlineKeyboardMarkup:
     rows: list[list[InlineKeyboardButton]] = []
     for product_id, label, price_cents, stock in variants:
         if stock > 0:
             rows.append([_inline_button(f"{label} · ${price_cents / 100:.0f}", callback_data=f"buy:{product_id}")])
         else:
             rows.append([_inline_button(f"{label} · нет в наличии", callback_data="noop")])
+    if buy_crypto_url:
+        rows.append([_inline_button("Удобно купить крипту тут", url=buy_crypto_url)])
     rows.append([_inline_button("Назад", callback_data="catalog")])
     return InlineKeyboardMarkup(inline_keyboard=rows)
 
@@ -86,6 +99,7 @@ def quantity_selector_keyboard(
     *,
     min_qty: int,
     max_qty: int,
+    buy_crypto_url: str | None = None,
 ) -> InlineKeyboardMarkup:
     dec_qty = qty - 1 if qty > min_qty else qty
     inc_qty = qty + 1 if qty < max_qty else qty
@@ -110,9 +124,11 @@ def quantity_selector_keyboard(
     rows.extend(
         [
             [_inline_button(proceed_text, callback_data=f"qtygo:{product_id}:{payment_method}:{qty}")],
-            [_inline_button("Назад", callback_data=back_callback)],
         ]
     )
+    if buy_crypto_url:
+        rows.append([_inline_button("Удобно купить крипту тут", url=buy_crypto_url)])
+    rows.append([_inline_button("Назад", callback_data=back_callback)])
     return InlineKeyboardMarkup(inline_keyboard=rows)
 
 
@@ -125,14 +141,13 @@ def tribute_checkout_keyboard(url: str, order_id: str) -> InlineKeyboardMarkup:
     )
 
 
-def cryptobot_checkout_keyboard(url: str, order_id: str, *, buy_crypto_url: str | None = None) -> InlineKeyboardMarkup:
-    rows: list[list[InlineKeyboardButton]] = [
-        [_inline_button("Оплатить криптой", url=url)],
-    ]
-    if buy_crypto_url:
-        rows.append([_inline_button("Удобно купить крипту тут", url=buy_crypto_url)])
-    rows.append([_inline_button("Отменить оплату", callback_data=f"paycancel:{order_id}", style="danger")])
-    return InlineKeyboardMarkup(inline_keyboard=rows)
+def cryptobot_checkout_keyboard(url: str, order_id: str) -> InlineKeyboardMarkup:
+    return InlineKeyboardMarkup(
+        inline_keyboard=[
+            [_inline_button("Оплатить криптой", url=url)],
+            [_inline_button("Отменить оплату", callback_data=f"paycancel:{order_id}", style="danger")],
+        ]
+    )
 
 
 def orders_keyboard() -> InlineKeyboardMarkup:
