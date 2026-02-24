@@ -161,7 +161,7 @@ def _group_details_text(group: str, products: list, stock_map: dict[int, int]) -
             "<b>Replit</b>\n"
             "<blockquote>Облачная среда разработки: AI-модели, деплой и хостинг проектов.</blockquote>\n"
             f"Core: <code>${(core.price_usd_cents / 100):.0f}</code> · В наличии: <b>{stock_map.get(core.id, 0) if core else 0}</b> · "
-            "внутренний баланс <code>50 + 10 бонус</code>\n"
+            "внутренний баланс <code>$25 внутренних токенов</code>\n"
             f"Team: <code>${(team.price_usd_cents / 100):.0f}</code> · В наличии: <b>{stock_map.get(team.id, 0) if team else 0}</b> · "
             "внутренний баланс <code>120</code>"
         )
