@@ -1,9 +1,10 @@
 from __future__ import annotations
 
+import asyncio
 from html import escape
 
-from aiogram import F, Router
-from aiogram.exceptions import TelegramBadRequest
+from aiogram import Bot, F, Router
+from aiogram.exceptions import TelegramBadRequest, TelegramForbiddenError
 from aiogram.filters import CommandStart
 from aiogram.types import CallbackQuery, FSInputFile, Message
 
@@ -18,15 +19,17 @@ from saleacc_bot.keyboards import (
     quantity_selector_keyboard,
     tribute_checkout_keyboard,
 )
-from saleacc_bot.models import PaymentMethod
+from saleacc_bot.models import OrderStatus, PaymentMethod
 from saleacc_bot.services.catalog import get_product_by_id, list_active_products
 from saleacc_bot.services.cryptobot import CryptoBotClient
 from saleacc_bot.services.inventory import get_stock_map
 from saleacc_bot.services.orders import (
+    RESERVE_MINUTES,
     build_tribute_url_for_product,
     cleanup_expired_reservations,
     create_order_with_reservation,
     deliver_order_csv,
+    get_order,
     list_user_orders,
     mark_order_paid,
     resolve_tribute_base_url,
@@ -38,6 +41,7 @@ router = Router(name="user")
 settings = get_settings()
 crypto_client = CryptoBotClient(settings)
 _main_menu_message_id: dict[int, int] = {}
+_checkout_timeout_tasks: dict[str, asyncio.Task] = {}
 GROUP_ORDER = ("gpt-pro", "lovable", "replit")
 
 
@@ -87,6 +91,68 @@ async def _safe_edit(callback: CallbackQuery, text: str, reply_markup) -> None:
     except TelegramBadRequest as exc:
         if "message is not modified" not in str(exc):
             raise
+
+
+def _schedule_checkout_timeout(
+    *,
+    bot: Bot,
+    order_id: str,
+    chat_id: int,
+    message_id: int,
+    user_id: int,
+) -> None:
+    existing = _checkout_timeout_tasks.get(order_id)
+    if existing and not existing.done():
+        existing.cancel()
+
+    task = asyncio.create_task(
+        _checkout_timeout_job(
+            bot=bot,
+            order_id=order_id,
+            chat_id=chat_id,
+            message_id=message_id,
+            user_id=user_id,
+        )
+    )
+    _checkout_timeout_tasks[order_id] = task
+
+
+async def _checkout_timeout_job(
+    *,
+    bot: Bot,
+    order_id: str,
+    chat_id: int,
+    message_id: int,
+    user_id: int,
+) -> None:
+    try:
+        await asyncio.sleep((RESERVE_MINUTES * 60) + 5)
+
+        async with get_session() as session:
+            await cleanup_expired_reservations(session)
+            order = await get_order(session, order_id)
+            if order is None or order.status != OrderStatus.CANCELLED:
+                return
+
+        try:
+            await bot.delete_message(chat_id=chat_id, message_id=message_id)
+        except (TelegramBadRequest, TelegramForbiddenError):
+            pass
+
+        main_text, main_kb = main_menu_payload(settings, user_id)
+        sent = await bot.send_message(
+            chat_id=chat_id,
+            text=main_text,
+            reply_markup=main_kb,
+            parse_mode="HTML",
+        )
+        _main_menu_message_id[user_id] = sent.message_id
+    except asyncio.CancelledError:
+        raise
+    except Exception:
+        return
+    finally:
+        _checkout_timeout_tasks.pop(order_id, None)
 
 
 async def _load_catalog() -> tuple[list, dict[int, int]]:
@@ -619,6 +685,14 @@ async def _start_checkout(callback: CallbackQuery, product_id: int, method: str,
                 "3. После webhook-подтверждения заказ будет выдан автоматически.",
                 cryptobot_checkout_keyboard(invoice.pay_url, product_id, qty),
             )
+            if callback.message:
+                _schedule_checkout_timeout(
+                    bot=callback.bot,
+                    order_id=order.id,
+                    chat_id=callback.message.chat.id,
+                    message_id=callback.message.message_id,
+                    user_id=callback.from_user.id,
+                )
             await callback.answer()
             return
 
@@ -661,6 +735,14 @@ async def _start_checkout(callback: CallbackQuery, product_id: int, method: str,
                 "3. После webhook-подтверждения заказ будет выдан автоматически.",
                 tribute_checkout_keyboard(tribute_url, product_id, qty),
             )
+            if callback.message:
+                _schedule_checkout_timeout(
+                    bot=callback.bot,
+                    order_id=order.id,
+                    chat_id=callback.message.chat.id,
+                    message_id=callback.message.message_id,
+                    user_id=callback.from_user.id,
+                )
             await callback.answer()
             return
 
