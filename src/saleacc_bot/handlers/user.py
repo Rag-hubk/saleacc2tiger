@@ -150,9 +150,9 @@ def _group_details_text(group: str, products: list, stock_map: dict[int, int]) -
         return (
             "<b>Lovable AI Pro</b>\n"
             "<blockquote>Для быстрого создания MVP и веб-приложений с помощью ИИ.</blockquote>\n"
-            f"100 токенов на аккаунте: <code>${(l100.price_usd_cents / 100):.0f}</code> · В наличии: <b>{stock_map.get(l100.id, 0) if l100 else 0}</b>\n"
-            f"200 токенов на аккаунте: <code>${(l200.price_usd_cents / 100):.0f}</code> · В наличии: <b>{stock_map.get(l200.id, 0) if l200 else 0}</b>\n"
-            f"300 токенов на аккаунте: <code>${(l300.price_usd_cents / 100):.0f}</code> · В наличии: <b>{stock_map.get(l300.id, 0) if l300 else 0}</b>"
+            f"105 токенов на аккаунте: <code>${(l100.price_usd_cents / 100):.0f}</code> · В наличии: <b>{stock_map.get(l100.id, 0) if l100 else 0}</b>\n"
+            f"205 токенов на аккаунте: <code>${(l200.price_usd_cents / 100):.0f}</code> · В наличии: <b>{stock_map.get(l200.id, 0) if l200 else 0}</b>\n"
+            f"305 токенов на аккаунте: <code>${(l300.price_usd_cents / 100):.0f}</code> · В наличии: <b>{stock_map.get(l300.id, 0) if l300 else 0}</b>"
         )
     if group == "replit":
         core = by_slug.get("replit-core")
