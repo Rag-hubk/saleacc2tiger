@@ -227,6 +227,7 @@ def admin_broadcast_segment_keyboard() -> InlineKeyboardMarkup:
         inline_keyboard=[
             [_inline_button("Все пользователи", callback_data="admin_broadcast_segment:all")],
             [_inline_button("Не оплатили", callback_data="admin_broadcast_segment:abandoned")],
+            [_inline_button("По username", callback_data="admin_broadcast_segment:single")],
             [_inline_button("Отмена", callback_data="admin_broadcast_cancel")],
         ]
     )

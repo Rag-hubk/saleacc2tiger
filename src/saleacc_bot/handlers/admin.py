@@ -10,7 +10,7 @@ from aiogram import F, Router
 from aiogram.exceptions import TelegramAPIError, TelegramBadRequest, TelegramForbiddenError, TelegramRetryAfter
 from aiogram.filters import Command, CommandObject
 from aiogram.types import CallbackQuery, FSInputFile, InlineKeyboardButton, InlineKeyboardMarkup, Message
-from sqlalchemy import select
+from sqlalchemy import func, select
 
 from saleacc_bot.config import get_settings
 from saleacc_bot.db import get_session
@@ -24,7 +24,7 @@ from saleacc_bot.keyboards import (
     admin_sales_keyboard,
     admin_stats_keyboard,
 )
-from saleacc_bot.models import Order, OrderStatus, PaymentMethod
+from saleacc_bot.models import BotUser, Order, OrderStatus, PaymentMethod
 from saleacc_bot.services.catalog import list_active_products
 from saleacc_bot.services.inventory import get_inventory_summary_by_slug, get_stock_map, list_recent_sales
 from saleacc_bot.services.orders import deliver_order_csv, get_order, mark_order_paid
@@ -39,6 +39,8 @@ _BROADCAST_DELAY_SECONDS = 0.07
 @dataclass
 class BroadcastDraft:
     segment: str | None = None
+    target_username: str | None = None
+    target_user_id: int | None = None
     source_chat_id: int | None = None
     source_message_id: int | None = None
     button_text: str | None = None
@@ -314,6 +316,8 @@ def _clear_broadcast_draft(admin_id: int) -> None:
 def _broadcast_segment_label(segment: str) -> str:
     if segment == "abandoned":
         return "Не оплатили"
+    if segment == "single":
+        return "Один пользователь"
     return "Все пользователи"
 
 
@@ -327,7 +331,12 @@ def _broadcast_button_markup(draft: BroadcastDraft) -> InlineKeyboardMarkup | No
     )
 
 
-async def _resolve_broadcast_recipients(segment: str, admin_user_id: int) -> list[int]:
+async def _resolve_broadcast_recipients(
+    segment: str,
+    admin_user_id: int,
+    *,
+    target_user_id: int | None = None,
+) -> list[int]:
     async with get_session() as session:
         all_recipients = await list_broadcast_user_ids(session)
         if segment == "all":
@@ -353,10 +362,52 @@ async def _resolve_broadcast_recipients(segment: str, admin_user_id: int) -> lis
             }
             known = set(all_recipients)
             recipients = sorted(known.intersection(abandoned_ids))
+        elif segment == "single":
+            recipients = [target_user_id] if target_user_id is not None else []
         else:
             recipients = []
-
+    if segment == "single":
+        return recipients
     return [uid for uid in recipients if uid != admin_user_id]
+
+
+def _normalize_username(raw: str) -> str | None:
+    username = raw.strip()
+    if not username:
+        return None
+    if username.startswith("@"):
+        username = username[1:]
+    username = username.strip()
+    if not username:
+        return None
+    allowed = set("abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789_")
+    if any(ch not in allowed for ch in username):
+        return None
+    if len(username) < 5 or len(username) > 32:
+        return None
+    return username.lower()
+
+
+async def _resolve_user_id_by_username(username: str) -> int | None:
+    async with get_session() as session:
+        user_id = await session.scalar(
+            select(BotUser.tg_user_id)
+            .where(func.lower(BotUser.tg_username) == username)
+            .order_by(BotUser.updated_at.desc())
+            .limit(1)
+        )
+        if user_id is not None:
+            return int(user_id)
+
+        user_id = await session.scalar(
+            select(Order.tg_user_id)
+            .where(func.lower(Order.tg_username) == username)
+            .order_by(Order.updated_at.desc())
+            .limit(1)
+        )
+        if user_id is not None:
+            return int(user_id)
+    return None
 
 
 def _is_valid_broadcast_content(message: Message) -> bool:
@@ -386,7 +437,16 @@ async def _send_broadcast_preview(admin_message: Message, draft: BroadcastDraft)
         await admin_message.answer("Черновик рассылки неполный. Начните заново.")
         return
 
-    recipients = await _resolve_broadcast_recipients(draft.segment, admin_message.from_user.id)
+    recipients = await _resolve_broadcast_recipients(
+        draft.segment,
+        admin_message.from_user.id,
+        target_user_id=draft.target_user_id,
+    )
+    segment_label = _broadcast_segment_label(draft.segment)
+    if draft.segment == "single":
+        username_part = f"@{draft.target_username}" if draft.target_username else "username не задан"
+        user_part = str(draft.target_user_id) if draft.target_user_id is not None else "user_id не найден"
+        segment_label = f"{segment_label}: {username_part} ({user_part})"
     await admin_message.answer("Предпросмотр сообщения:")
     await admin_message.bot.copy_message(
         chat_id=admin_message.chat.id,
@@ -396,7 +456,7 @@ async def _send_broadcast_preview(admin_message: Message, draft: BroadcastDraft)
     )
     await admin_message.answer(
         "Параметры рассылки:\n"
-        f"- Сегмент: {_broadcast_segment_label(draft.segment)}\n"
+        f"- Сегмент: {segment_label}\n"
         f"- Получателей: {len(recipients)}\n"
         f"- Inline кнопка: {'да' if draft.button_text and draft.button_url else 'нет'}\n"
         f"- Пауза между сообщениями: {_BROADCAST_DELAY_SECONDS:.2f} сек",
@@ -409,12 +469,17 @@ async def _run_broadcast(
     *,
     admin_message: Message,
     segment: str,
+    target_user_id: int | None = None,
     source_chat_id: int | None,
     source_message_id: int | None,
     text_payload: str | None = None,
     reply_markup: InlineKeyboardMarkup | None = None,
 ) -> tuple[int, int, int, int]:
-    recipients = await _resolve_broadcast_recipients(segment, admin_message.from_user.id)
+    recipients = await _resolve_broadcast_recipients(
+        segment,
+        admin_message.from_user.id,
+        target_user_id=target_user_id,
+    )
     if not recipients:
         return 0, 0, 0, 0
 
@@ -586,7 +651,7 @@ async def admin_broadcast_segment_callback(callback: CallbackQuery) -> None:
         await callback.answer("Недостаточно прав", show_alert=True)
         return
     _, _, segment = callback.data.partition(":")
-    if segment not in {"all", "abandoned"}:
+    if segment not in {"all", "abandoned", "single"}:
         await callback.answer("Некорректный сегмент", show_alert=True)
         return
 
@@ -596,10 +661,25 @@ async def admin_broadcast_segment_callback(callback: CallbackQuery) -> None:
         _broadcast_drafts[callback.from_user.id] = draft
 
     draft.segment = segment
+    draft.target_username = None
+    draft.target_user_id = None
     draft.source_chat_id = None
     draft.source_message_id = None
     draft.button_text = None
     draft.button_url = None
+    if segment == "single":
+        draft.step = "await_target_username"
+        await _safe_edit(
+            callback,
+            "Рассылка\n\n"
+            f"Сегмент: {_broadcast_segment_label(segment)}\n\n"
+            "Шаг 2/5: отправьте username получателя.\n"
+            "Формат: @username",
+            admin_broadcast_segment_keyboard(),
+        )
+        await callback.answer("Сегмент выбран")
+        return
+
     draft.step = "await_content"
     await _safe_edit(
         callback,
@@ -637,10 +717,11 @@ async def admin_broadcast_button_choice_callback(callback: CallbackQuery) -> Non
         return
 
     draft.step = "await_button_text"
+    step_label = "Шаг 4/5" if draft.segment == "single" else "Шаг 3/4"
     await _safe_edit(
         callback,
         "Рассылка\n\n"
-        "Шаг 3/4: отправьте текст для Inline кнопки.\n"
+        f"{step_label}: отправьте текст для Inline кнопки.\n"
         "Пример: Купить сейчас",
         admin_broadcast_add_button_keyboard(),
     )
@@ -667,6 +748,7 @@ async def admin_broadcast_send_callback(callback: CallbackQuery) -> None:
     total, sent, failed, blocked = await _run_broadcast(
         admin_message=callback.message,
         segment=draft.segment,
+        target_user_id=draft.target_user_id,
         source_chat_id=draft.source_chat_id,
         source_message_id=draft.source_message_id,
         reply_markup=_broadcast_button_markup(draft),
@@ -798,9 +880,36 @@ async def admin_broadcast_payload(message: Message) -> None:
         draft.source_chat_id = message.chat.id
         draft.source_message_id = message.message_id
         draft.step = "await_button_choice"
+        step_label = "Шаг 4/5" if draft.segment == "single" else "Шаг 3/4"
         await message.answer(
-            "Шаг 3/4: нужна Inline кнопка в рассылке?",
+            f"{step_label}: нужна Inline кнопка в рассылке?",
             reply_markup=admin_broadcast_add_button_keyboard(),
+        )
+        return
+
+    if draft.step == "await_target_username":
+        normalized = _normalize_username(message.text or "")
+        if not normalized:
+            await message.answer(
+                "Username некорректный. Формат: @username\n"
+                "Только латиница, цифры, underscore, длина 5-32."
+            )
+            return
+        user_id = await _resolve_user_id_by_username(normalized)
+        if user_id is None:
+            await message.answer(
+                "Не нашел такого username в базе бота.\n"
+                "Проверьте написание или попросите пользователя сначала написать /start."
+            )
+            return
+        draft.target_username = normalized
+        draft.target_user_id = user_id
+        draft.step = "await_content"
+        await message.answer(
+            "Получатель найден:\n"
+            f"@{normalized} ({user_id})\n\n"
+            "Шаг 3/5: отправьте контент для рассылки.\n"
+            "Поддерживается: текст, фото, видео, документ, GIF."
         )
         return
 
@@ -814,7 +923,8 @@ async def admin_broadcast_payload(message: Message) -> None:
             return
         draft.button_text = text
         draft.step = "await_button_url"
-        await message.answer("Шаг 4/4: отправьте URL кнопки. Формат: https://example.com")
+        step_label = "Шаг 5/5" if draft.segment == "single" else "Шаг 4/4"
+        await message.answer(f"{step_label}: отправьте URL кнопки. Формат: https://example.com")
         return
 
     if draft.step == "await_button_url":
