@@ -607,7 +607,6 @@ class SheetsStore:
             return row[index]
         return ""
 
-
 def _parse_datetime_utc(raw: str) -> datetime | None:
     if not raw:
         return None

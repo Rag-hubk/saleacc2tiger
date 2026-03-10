@@ -48,6 +48,9 @@ def catalog_keyboard(
     rows: list[list[InlineKeyboardButton]] = [
         [
             _inline_button("𖣔 GPT Pro", callback_data="group:gpt-pro"),
+            _inline_button("◈ Gemini", callback_data="group:gemini"),
+        ],
+        [
             _inline_button("♡ Lovable", callback_data="group:lovable"),
             _inline_button("▚ Replit", callback_data="group:replit"),
         ],

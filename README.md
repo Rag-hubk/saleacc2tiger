@@ -58,6 +58,7 @@ In worksheet `inventory`:
 - `product` (one of):
   - `gpt-pro-1m`
   - `gpt-pro-3m`
+  - `gemini-ultra-1m`
   - `lovable-100`
   - `lovable-200`
   - `lovable-300`
@@ -80,7 +81,7 @@ item_id=gpt1m-001, product=gpt-pro-1m, status=free, access_login=user@example.co
 
 Ты заполняешь руками только эти 4 поля:
 
-- `product` -> SKU тарифа (`gpt-pro-1m`, `gpt-pro-3m`, `lovable-100`, `lovable-200`, `lovable-300`, `replit-core`, `replit-team`)
+- `product` -> SKU тарифа (`gpt-pro-1m`, `gpt-pro-3m`, `gemini-ultra-1m`, `lovable-100`, `lovable-200`, `lovable-300`, `replit-core`, `replit-team`)
 - `status` -> статус (`free`)
 - `access_login` -> логин (gmail/почта аккаунта)
 - `access_secret` -> пароль

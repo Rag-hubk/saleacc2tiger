@@ -34,7 +34,7 @@ router = Router(name="user")
 settings = get_settings()
 crypto_client = CryptoBotClient(settings)
 _main_menu_message_id: dict[int, int] = {}
-GROUP_ORDER = ("gpt-pro", "lovable", "replit")
+GROUP_ORDER = ("gpt-pro", "gemini", "lovable", "replit")
 logger = logging.getLogger(__name__)
 PUBLIC_OFFER_URL = "https://telegra.ph/Publichnaya-oferta-i-pravila-ispolzovaniya-servisa-Vibestack-02-24"
 
@@ -83,6 +83,8 @@ def _catalog_text(products: list, stock_map: dict[int, int]) -> str:
     def group_slug(slug: str) -> str:
         if slug.startswith("gpt-pro"):
             return "gpt-pro"
+        if slug.startswith("gemini"):
+            return "gemini"
         if slug.startswith("lovable"):
             return "lovable"
         if slug.startswith("replit"):
@@ -96,6 +98,7 @@ def _catalog_text(products: list, stock_map: dict[int, int]) -> str:
     lines = ["<b>Доступные подписки</b>", ""]
     title_map = {
         "gpt-pro": "GPT Pro",
+        "gemini": "Gemini AI Ultra",
         "lovable": "Lovable AI Pro",
         "replit": "Replit",
     }
@@ -116,6 +119,8 @@ def _catalog_text(products: list, stock_map: dict[int, int]) -> str:
 def _group_slug(product_slug: str) -> str:
     if product_slug.startswith("gpt-pro"):
         return "gpt-pro"
+    if product_slug.startswith("gemini"):
+        return "gemini"
     if product_slug.startswith("lovable"):
         return "lovable"
     if product_slug.startswith("replit"):
@@ -128,6 +133,8 @@ def _variant_label(product_slug: str) -> str:
         return "1 месяц"
     if product_slug == "gpt-pro-3m":
         return "3 месяца"
+    if product_slug == "gemini-ultra-1m":
+        return "Ultra + antigravity · 1 месяц"
     if product_slug == "lovable-100":
         return "105 токенов"
     if product_slug == "lovable-200":
@@ -152,6 +159,13 @@ def _group_details_text(group: str, products: list, stock_map: dict[int, int]) -
             "Реальная цена по рынку за GPT Pro: <code>$200/мес</code>.\n\n"
             f"1 месяц: <code>${(one.price_usd_cents / 100):.0f}</code> · В наличии: <b>{stock_map.get(one.id, 0) if one else 0}</b>\n"
             f"3 месяца: <code>${(three.price_usd_cents / 100):.0f}</code> · В наличии: <b>{stock_map.get(three.id, 0) if three else 0}</b>"
+        )
+    if group == "gemini":
+        gemini = by_slug.get("gemini-ultra-1m")
+        return (
+            "<b>Gemini AI Ultra</b>\n"
+            "<blockquote>Полный доступ к Gemini Ultra + дополнительный доступ к antigravity.</blockquote>\n"
+            f"1 месяц: <code>${(gemini.price_usd_cents / 100):.0f}</code> · В наличии: <b>{stock_map.get(gemini.id, 0) if gemini else 0}</b>"
         )
     if group == "lovable":
         l100 = by_slug.get("lovable-100")
@@ -183,6 +197,7 @@ def _group_variants(group: str, products: list, stock_map: dict[int, int]) -> li
     order_map = {
         "gpt-pro-1m": 1,
         "gpt-pro-3m": 2,
+        "gemini-ultra-1m": 1,
         "lovable-100": 1,
         "lovable-200": 2,
         "lovable-300": 3,

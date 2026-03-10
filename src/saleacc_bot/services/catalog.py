@@ -23,6 +23,13 @@ DEFAULT_PRODUCTS = [
         "price_stars": 10000,
     },
     {
+        "slug": "gemini-ultra-1m",
+        "title": "Gemini AI Ultra · 1 месяц",
+        "description": "Gemini AI Ultra + доступ к antigravity",
+        "price_usd_cents": 13000,
+        "price_stars": 13000,
+    },
+    {
         "slug": "lovable-100",
         "title": "Lovable AI Pro · 100 токенов",
         "description": "На аккаунте 100 внутренних токенов",
