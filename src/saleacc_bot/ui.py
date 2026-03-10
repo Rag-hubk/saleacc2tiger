@@ -7,11 +7,9 @@ from saleacc_bot.keyboards import main_menu_keyboard
 
 MAIN_MENU_TEXT = (
     "<b>Премиум-доступы к топовым AI-сервисам</b>\n\n"
-    "<b>GPT Pro</b> от <code>$50</code> • <b>Lovable AI Pro</b> от <code>$15</code> • <b>Replit</b> от <code>$15</code>\n\n"
-    "Оплата: <b>только криптовалютой</b> через Crypto Bot.\n"
     "После подтверждения оплаты доступы приходят в личный чат в формате CSV.\n\n"
     "<blockquote>Прозрачные условия, быстрый процесс и поддержка.</blockquote>\n"
-    "<i>Выберите нужный раздел ниже.</i>"
+    "<i>Откройте каталог и выберите нужный сервис.</i>"
 )
 
 
