@@ -170,11 +170,25 @@ def get_sheets_store() -> SheetsStore:
 
 def _build_google_credentials(settings: Settings) -> Credentials:
     if settings.google_service_account_json_b64:
-        decoded = base64.b64decode(settings.google_service_account_json_b64).decode("utf-8")
-        info = json.loads(decoded)
+        try:
+            normalized = "".join(settings.google_service_account_json_b64.split())
+            decoded = base64.b64decode(normalized, validate=True).decode("utf-8")
+        except Exception as exc:  # noqa: BLE001
+            raise RuntimeError("GOOGLE_SERVICE_ACCOUNT_JSON_B64 is not valid base64") from exc
+        try:
+            info = json.loads(decoded)
+        except Exception as exc:  # noqa: BLE001
+            raise RuntimeError("GOOGLE_SERVICE_ACCOUNT_JSON_B64 does not contain valid JSON") from exc
+        if not isinstance(info, dict):
+            raise RuntimeError("GOOGLE_SERVICE_ACCOUNT_JSON_B64 must decode to a Google service account JSON object")
         return Credentials.from_service_account_info(info, scopes=_SCOPES)
     if settings.google_service_account_json:
-        info = json.loads(settings.google_service_account_json)
+        try:
+            info = json.loads(settings.google_service_account_json)
+        except Exception as exc:  # noqa: BLE001
+            raise RuntimeError("GOOGLE_SERVICE_ACCOUNT_JSON is not valid JSON") from exc
+        if not isinstance(info, dict):
+            raise RuntimeError("GOOGLE_SERVICE_ACCOUNT_JSON must be a Google service account JSON object")
         return Credentials.from_service_account_info(info, scopes=_SCOPES)
     if settings.google_service_account_file:
         return Credentials.from_service_account_file(settings.google_service_account_file, scopes=_SCOPES)

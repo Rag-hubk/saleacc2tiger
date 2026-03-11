@@ -138,6 +138,14 @@ bash scripts/deploy_docker.sh
 - `GOOGLE_SERVICE_ACCOUNT_JSON_B64`
 - или `GOOGLE_SERVICE_ACCOUNT_JSON`
 
+Если используешь `GOOGLE_SERVICE_ACCOUNT_JSON_B64`, туда нужно класть base64 от всего файла service account JSON, а не `project_id`, не `client_id` и не `GOOGLE_SHEET_ID`.
+
+Пример для macOS/Linux:
+
+```bash
+base64 < google-service-account.json | tr -d '\n'
+```
+
 ## Важно по ЮKassa
 
 - бот собирает `e-mail` до создания платежа, чтобы передать его в `receipt.customer.email`

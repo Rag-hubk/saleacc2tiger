@@ -46,6 +46,12 @@ DATABASE_URL=${{Postgres.DATABASE_URL}}
 - `YOOKASSA_VAT_CODE`
 - `YOOKASSA_TAX_SYSTEM_CODE`
 
+Важно для Google credentials:
+
+- `GOOGLE_SERVICE_ACCOUNT_JSON_B64` должен содержать base64 от полного JSON-файла service account
+- это не `GOOGLE_SHEET_ID`, не числовой `project_id` и не отдельный ключ
+- удобно сгенерировать так: `base64 < google-service-account.json | tr -d '\n'`
+
 ## 4. Создай сервис `webhook`
 
 Настройки:
