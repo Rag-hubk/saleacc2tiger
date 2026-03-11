@@ -1,3 +1,3 @@
-from . import admin, payments, user
+from . import admin, user
 
-__all__ = ["admin", "payments", "user"]
+__all__ = ["admin", "user"]

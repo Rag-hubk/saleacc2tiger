@@ -1,58 +1,55 @@
-# VPS Deploy (One Command, Docker)
+# VPS Deploy
 
-## Quick start
+## Быстрый старт
 
-1. Clone project on VPS:
+1. Клонируй проект:
 
 ```bash
 git clone <your_repo_url> saleacc
 cd saleacc
 ```
 
-2. Prepare env and key:
+2. Подготовь переменные:
 
 ```bash
 cp .env.example .env
-# fill .env values
-mkdir -p keys
-# put service account file as: keys/google-sa.json
 ```
 
-3. First deploy (installs Docker on Debian/Ubuntu if needed):
+3. Подготовь Google credentials любым одним способом:
+
+- положи файл в `keys/google-sa.json`
+- или пропиши `GOOGLE_SERVICE_ACCOUNT_JSON`
+- или пропиши `GOOGLE_SERVICE_ACCOUNT_JSON_B64`
+
+4. Первый деплой:
 
 ```bash
 bash scripts/bootstrap_vps.sh
 ```
 
-That is it. Bot is built and started via Docker Compose.
+## Что поднимется
 
-## Next deploys (update to latest code)
+- `bot` - Telegram polling
+- `webhook` - FastAPI на порту `8000` для `ЮKassa`
+
+## Следующие деплои
 
 ```bash
 git pull
 bash scripts/deploy_docker.sh
 ```
 
-This command:
-- rebuilds image
-- runs `init_google_sheet.py`
-- recreates bot container (single latest container only)
-
-## Optional: webhook service
-
-If you also need webhook API (`/webhooks/tribute`, `/webhooks/cryptobot`):
-
-```bash
-ENABLE_WEBHOOK=1 bash scripts/deploy_docker.sh
-```
-
-`webhook` service will run on port `8000`.
-
-## Useful commands
+## Полезные команды
 
 ```bash
 docker compose ps
 docker compose logs -f bot
 docker compose logs -f webhook
 docker compose restart bot
+docker compose restart webhook
 ```
+
+## Проверка
+
+- healthcheck: `http://<server>:8000/health`
+- webhook `ЮKassa`: `http://<server>:8000/webhooks/yookassa`

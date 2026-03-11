@@ -5,14 +5,14 @@ import asyncio
 
 from dotenv import load_dotenv
 
-from saleacc_bot.services.inventory import get_sheets_store
+from saleacc_bot.services.sheets_store import get_sheets_store
 
 load_dotenv()
 
 
 async def main() -> None:
     await get_sheets_store().ensure_schema()
-    print("Google Sheet schema is ready: worksheets inventory + sales")
+    print("Google Sheet schema is ready: worksheet orders")
 
 
 if __name__ == "__main__":

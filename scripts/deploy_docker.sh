@@ -9,9 +9,13 @@ if [[ ! -f .env ]]; then
   exit 1
 fi
 
-if [[ ! -f keys/google-sa.json ]]; then
-  echo "ERROR: keys/google-sa.json not found."
-  echo "Put your Google service account key here: keys/google-sa.json"
+set -a
+. ./.env
+set +a
+
+if [[ -z "${GOOGLE_SERVICE_ACCOUNT_JSON_B64:-}" && -z "${GOOGLE_SERVICE_ACCOUNT_JSON:-}" && ! -f keys/google-sa.json ]]; then
+  echo "ERROR: Google service account is not configured."
+  echo "Use GOOGLE_SERVICE_ACCOUNT_JSON_B64 / GOOGLE_SERVICE_ACCOUNT_JSON or keys/google-sa.json."
   exit 1
 fi
 
@@ -41,10 +45,8 @@ compose run --rm bot env PYTHONPATH=src python3 scripts/init_google_sheet.py
 echo "Deploy: restart single bot container"
 compose up -d --no-deps --force-recreate bot
 
-if [[ "${ENABLE_WEBHOOK:-0}" == "1" ]]; then
-  echo "Deploy: webhook profile is enabled"
-  compose up -d --no-deps --force-recreate webhook
-fi
+echo "Deploy: restart webhook container"
+compose up -d --no-deps --force-recreate webhook
 
 echo "Deploy done. Active services:"
 compose ps

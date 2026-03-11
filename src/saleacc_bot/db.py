@@ -15,15 +15,8 @@ def _normalize_database_url(raw_url: str) -> str:
     url = (raw_url or "").strip()
     if not url:
         raise RuntimeError("DATABASE_URL is empty")
-
-    # Railway variable reference was not resolved.
     if "${{" in url and "}}" in url:
-        raise RuntimeError(
-            "DATABASE_URL contains unresolved Railway reference. "
-            "Set it to ${{Postgres.DATABASE_URL}} (without quotes) in service/shared variables."
-        )
-
-    # SQLAlchemy async engine needs asyncpg driver.
+        raise RuntimeError("DATABASE_URL contains unresolved template reference")
     if url.startswith("postgres://"):
         return "postgresql+asyncpg://" + url[len("postgres://") :]
     if url.startswith("postgresql://"):
@@ -50,7 +43,9 @@ async def init_db() -> None:
     async with engine.begin() as conn:
         await conn.run_sync(Base.metadata.create_all)
         await _migrate_tg_id_columns_to_bigint(conn)
-        await _migrate_order_checkout_columns(conn)
+        await _ensure_bot_user_columns(conn)
+        await _ensure_product_columns(conn)
+        await _ensure_order_columns(conn)
 
 
 async def _migrate_tg_id_columns_to_bigint(conn: AsyncConnection) -> None:
@@ -81,60 +76,117 @@ async def _migrate_tg_id_columns_to_bigint(conn: AsyncConnection) -> None:
             ) THEN
                 ALTER TABLE public.orders ALTER COLUMN tg_user_id TYPE BIGINT;
             END IF;
-
-            IF EXISTS (
-                SELECT 1
-                FROM information_schema.columns
-                WHERE table_schema = 'public'
-                  AND table_name = 'inventory_items'
-                  AND column_name = 'reserved_by_tg_id'
-                  AND data_type = 'integer'
-            ) THEN
-                ALTER TABLE public.inventory_items ALTER COLUMN reserved_by_tg_id TYPE BIGINT;
-            END IF;
         END
         $$;
         """
     )
 
 
-async def _migrate_order_checkout_columns(conn: AsyncConnection) -> None:
-    if conn.dialect.name == "postgresql":
-        await conn.exec_driver_sql(
-            """
-            DO $$
-            BEGIN
-                IF NOT EXISTS (
-                    SELECT 1
-                    FROM information_schema.columns
-                    WHERE table_schema = 'public'
-                      AND table_name = 'orders'
-                      AND column_name = 'checkout_chat_id'
-                ) THEN
-                    ALTER TABLE public.orders ADD COLUMN checkout_chat_id BIGINT NULL;
-                END IF;
+async def _ensure_bot_user_columns(conn: AsyncConnection) -> None:
+    await _add_column_if_missing(conn, "bot_users", "email", "VARCHAR(255)")
 
-                IF NOT EXISTS (
-                    SELECT 1
-                    FROM information_schema.columns
-                    WHERE table_schema = 'public'
-                      AND table_name = 'orders'
-                      AND column_name = 'checkout_message_id'
-                ) THEN
-                    ALTER TABLE public.orders ADD COLUMN checkout_message_id INTEGER NULL;
-                END IF;
-            END
-            $$;
+
+async def _ensure_product_columns(conn: AsyncConnection) -> None:
+    await _add_column_if_missing(conn, "products", "price_kopecks", "INTEGER DEFAULT 50000")
+    await _add_column_if_missing(conn, "products", "sort_order", "INTEGER DEFAULT 100")
+    await _backfill_column_if_present(
+        conn,
+        table="products",
+        column="price_kopecks",
+        expression="50000",
+        condition="price_kopecks IS NULL",
+    )
+    await _backfill_column_if_present(
+        conn,
+        table="products",
+        column="sort_order",
+        expression="100",
+        condition="sort_order IS NULL",
+    )
+
+
+async def _ensure_order_columns(conn: AsyncConnection) -> None:
+    await _add_column_if_missing(conn, "orders", "customer_email", "VARCHAR(255)")
+    await _add_column_if_missing(conn, "orders", "product_slug", "VARCHAR(64)")
+    await _add_column_if_missing(conn, "orders", "product_title", "VARCHAR(128)")
+    await _add_column_if_missing(conn, "orders", "provider_payment_id", "VARCHAR(255)")
+    await _add_column_if_missing(conn, "orders", "provider_status", "VARCHAR(64)")
+    await _add_column_if_missing(conn, "orders", "payment_confirmation_url", "TEXT")
+    await _add_column_if_missing(conn, "orders", "cancellation_reason", "VARCHAR(255)")
+    await _add_column_if_missing(conn, "orders", "paid_at", "TIMESTAMP")
+    await _add_column_if_missing(conn, "orders", "cancelled_at", "TIMESTAMP")
+
+    if await _column_exists(conn, "orders", "provider_charge_id"):
+        await _backfill_column_if_present(
+            conn,
+            table="orders",
+            column="provider_payment_id",
+            expression="provider_charge_id",
+            condition="provider_payment_id IS NULL AND provider_charge_id IS NOT NULL",
+        )
+    await _backfill_column_if_present(
+        conn,
+        table="orders",
+        column="customer_email",
+        expression="''",
+        condition="customer_email IS NULL",
+    )
+    await _backfill_column_if_present(
+        conn,
+        table="orders",
+        column="product_slug",
+        expression="''",
+        condition="product_slug IS NULL",
+    )
+    await _backfill_column_if_present(
+        conn,
+        table="orders",
+        column="product_title",
+        expression="''",
+        condition="product_title IS NULL",
+    )
+
+
+async def _add_column_if_missing(
+    conn: AsyncConnection,
+    table_name: str,
+    column_name: str,
+    column_sql: str,
+) -> None:
+    if await _column_exists(conn, table_name, column_name):
+        return
+    await conn.exec_driver_sql(f"ALTER TABLE {table_name} ADD COLUMN {column_name} {column_sql};")
+
+
+async def _backfill_column_if_present(
+    conn: AsyncConnection,
+    *,
+    table: str,
+    column: str,
+    expression: str,
+    condition: str,
+) -> None:
+    if not await _column_exists(conn, table, column):
+        return
+    await conn.exec_driver_sql(f"UPDATE {table} SET {column} = {expression} WHERE {condition};")
+
+
+async def _column_exists(conn: AsyncConnection, table_name: str, column_name: str) -> bool:
+    if conn.dialect.name == "postgresql":
+        result = await conn.exec_driver_sql(
+            f"""
+            SELECT 1
+            FROM information_schema.columns
+            WHERE table_schema = 'public'
+              AND table_name = '{table_name}'
+              AND column_name = '{column_name}'
             """
         )
-        return
+        return result.first() is not None
 
     if conn.dialect.name == "sqlite":
-        result = await conn.exec_driver_sql("PRAGMA table_info(orders);")
+        result = await conn.exec_driver_sql(f"PRAGMA table_info({table_name});")
         rows = result.fetchall()
-        existing_columns = {str(row[1]) for row in rows}
+        return any(str(row[1]) == column_name for row in rows)
 
-        if "checkout_chat_id" not in existing_columns:
-            await conn.exec_driver_sql("ALTER TABLE orders ADD COLUMN checkout_chat_id BIGINT;")
-        if "checkout_message_id" not in existing_columns:
-            await conn.exec_driver_sql("ALTER TABLE orders ADD COLUMN checkout_message_id INTEGER;")
+    raise RuntimeError(f"Unsupported database dialect: {conn.dialect.name}")

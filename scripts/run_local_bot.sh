@@ -1,7 +1,8 @@
 #!/usr/bin/env zsh
 set -euo pipefail
 
-cd /Users/dub_m/Desktop/saleacc
+ROOT_DIR="$(cd "$(dirname "${0}")/.." && pwd)"
+cd "$ROOT_DIR"
 
 # Always run only one latest local process.
 PATTERN="saleacc_bot.main"
