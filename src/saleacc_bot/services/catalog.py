@@ -25,25 +25,6 @@ class ProductSpec:
 
 PRODUCT_SPECS: tuple[ProductSpec, ...] = (
     ProductSpec(
-        slug="gpt-plus-1m",
-        category="chatgpt",
-        title="ChatGPT Plus",
-        button_title="💚 ChatGPT Plus — 499₽/мес",
-        description="ChatGPT Plus для ежедневной работы, учебы и регулярных задач.",
-        price_kopecks=49900,
-        official_price_kopecks=158000,
-        sort_order=10,
-        features=(
-            "GPT-5 с продвинутым мышлением",
-            "Генерация картинок (DALL-E)",
-            "Создание видео (Sora, 720p)",
-            "Deep Research — глубокий анализ тем",
-            "Codex — AI-помощник для кода",
-            "До 160 сообщений / 3 часа",
-        ),
-        audience="Для кого: фрилансеры, студенты, маркетологи, все кому нужен мощный AI каждый день",
-    ),
-    ProductSpec(
         slug="gpt-pro-1m",
         category="chatgpt",
         title="ChatGPT Pro",

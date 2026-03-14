@@ -38,6 +38,14 @@ def support_keyboard(support_url: str) -> InlineKeyboardMarkup | None:
     return InlineKeyboardMarkup(inline_keyboard=[[_button("📲 Написать", url=support_url)]])
 
 
+def payment_result_keyboard(*, support_url: str | None = None) -> InlineKeyboardMarkup:
+    rows: list[list[InlineKeyboardButton]] = []
+    if support_url and is_valid_http_url(support_url):
+        rows.append([_button("📲 Поддержка", url=support_url)])
+    rows.append([_button("Главное меню", callback_data="main")])
+    return InlineKeyboardMarkup(inline_keyboard=rows)
+
+
 def section_keyboard(products: list[Product], *, back_callback: str = "catalog") -> InlineKeyboardMarkup:
     rows: list[list[InlineKeyboardButton]] = []
     for product in products:

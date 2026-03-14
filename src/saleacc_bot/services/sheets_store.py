@@ -235,13 +235,6 @@ class SheetsStore:
         changed = False
         for inventory_key, product_key, login, secret, note in (
             (
-                "test-gpt-plus-001",
-                "gpt-plus-1m",
-                "test-plus@example.com",
-                "plus-password-001",
-                "Тестовая выдача ChatGPT Plus. Замени эти данные на реальные аккаунты.",
-            ),
-            (
                 "test-gpt-pro-001",
                 "gpt-pro-1m",
                 "test-pro@example.com",

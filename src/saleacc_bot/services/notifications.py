@@ -2,13 +2,12 @@ from __future__ import annotations
 
 from aiogram import Bot
 from aiogram.exceptions import TelegramBadRequest, TelegramForbiddenError
-from aiogram.types import FSInputFile
 
 from saleacc_bot.config import Settings
-from saleacc_bot.keyboards import support_keyboard, user_reply_keyboard
+from saleacc_bot.keyboards import payment_result_keyboard
 from saleacc_bot.models import Order
 from saleacc_bot.services.stock import DeliveryAccount, order_needs_auto_delivery
-from saleacc_bot.ui import format_price, main_menu_image_path, main_menu_text
+from saleacc_bot.ui import format_price
 
 
 async def notify_order_paid(
@@ -20,30 +19,13 @@ async def notify_order_paid(
 ) -> None:
     try:
         user_text = _build_user_paid_text(order, stock_account=stock_account)
-        support_markup = support_keyboard(settings.support_url) if not order_needs_auto_delivery(order) else None
+        support_url = settings.support_url if not order_needs_auto_delivery(order) else None
         await bot.send_message(
             chat_id=order.tg_user_id,
             text=user_text,
-            reply_markup=support_markup,
+            reply_markup=payment_result_keyboard(support_url=support_url),
             parse_mode="HTML",
         )
-        main_text = main_menu_text()
-        image_path = main_menu_image_path()
-        if image_path.is_file():
-            await bot.send_photo(
-                chat_id=order.tg_user_id,
-                photo=FSInputFile(str(image_path)),
-                caption=main_text,
-                reply_markup=user_reply_keyboard(),
-                parse_mode="HTML",
-            )
-        else:
-            await bot.send_message(
-                chat_id=order.tg_user_id,
-                text=main_text,
-                reply_markup=user_reply_keyboard(),
-                parse_mode="HTML",
-            )
     except (TelegramBadRequest, TelegramForbiddenError):
         pass
 

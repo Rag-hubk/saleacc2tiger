@@ -2,7 +2,6 @@
 
 Telegram-бот витрины `NH | STORE01` для продажи:
 
-- `ChatGPT Plus` — `499 ₽/мес`
 - `ChatGPT Pro` — `4 990 ₽/мес`
 - `Google AI Ultra` — `7 990 ₽/мес`
 
@@ -23,7 +22,6 @@ Telegram-бот витрины `NH | STORE01` для продажи:
 
 ### ChatGPT
 
-- `ChatGPT Plus`
 - `ChatGPT Pro`
 
 ### Gemini
@@ -90,7 +88,7 @@ PYTHONPATH=src python3 scripts/init_google_sheet.py
 - `access_secret`
 - `note`
 
-Если лист `inventory` пустой, бот добавляет тестовые строки для `ChatGPT Plus` и `ChatGPT Pro`, чтобы было понятно, как заполнять склад вручную.
+Если лист `inventory` пустой, бот добавляет тестовую строку для `ChatGPT Pro`, чтобы было понятно, как заполнять склад вручную.
 
 Если в логах есть `APIError: [403]: Google Sheets API has not been used in project ... or it is disabled`, значит credentials валидны, но `Google Sheets API` выключен в GCP.
 
