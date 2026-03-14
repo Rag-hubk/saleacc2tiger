@@ -59,14 +59,10 @@ class Settings:
     yookassa_shop_id: str
     yookassa_secret_key: str
     yookassa_return_url: str
-    yookassa_api_base: str
-    yookassa_vat_code: int
-    yookassa_tax_system_code: int | None
 
 
 @lru_cache(maxsize=1)
 def get_settings() -> Settings:
-    tax_system_raw = _optional_env("YOOKASSA_TAX_SYSTEM_CODE")
     legacy_orders_worksheet = (os.getenv("GOOGLE_ORDERS_WORKSHEET", "").strip() or "orders")
     sales_worksheet = os.getenv("GOOGLE_SALES_WORKSHEET", "").strip()
     if not sales_worksheet:
@@ -90,7 +86,4 @@ def get_settings() -> Settings:
         yookassa_shop_id=_require_env("YOOKASSA_SHOP_ID"),
         yookassa_secret_key=_require_env("YOOKASSA_SECRET_KEY"),
         yookassa_return_url=_require_env("YOOKASSA_RETURN_URL"),
-        yookassa_api_base=os.getenv("YOOKASSA_API_BASE", "https://api.yookassa.ru/v3").strip(),
-        yookassa_vat_code=_parse_int(os.getenv("YOOKASSA_VAT_CODE"), 1),
-        yookassa_tax_system_code=int(tax_system_raw) if tax_system_raw else None,
     )

@@ -10,6 +10,9 @@ import aiohttp
 from saleacc_bot.config import Settings
 from saleacc_bot.models import Order
 
+YOOKASSA_API_BASE = "https://api.yookassa.ru/v3"
+YOOKASSA_VAT_CODE = 1
+
 
 @dataclass(frozen=True)
 class YooKassaPayment:
@@ -40,7 +43,7 @@ class YooKassaClient:
                 "telegram_user_id": str(order.tg_user_id),
                 "product_slug": order.product_slug,
             },
-            "receipt": _build_receipt(settings=self._settings, order=order),
+            "receipt": _build_receipt(order=order),
         }
         data = await self._request("POST", "/payments", json=payload, idempotence_key=str(uuid4()))
         return _parse_payment(data)
@@ -61,7 +64,7 @@ class YooKassaClient:
         json: dict[str, Any] | None = None,
         idempotence_key: str | None = None,
     ) -> dict[str, Any]:
-        url = f"{self._settings.yookassa_api_base.rstrip('/')}{path}"
+        url = f"{YOOKASSA_API_BASE}{path}"
         headers = {"Content-Type": "application/json"}
         if idempotence_key:
             headers["Idempotence-Key"] = idempotence_key
@@ -78,7 +81,7 @@ class YooKassaClient:
         return payload
 
 
-def _build_receipt(*, settings: Settings, order: Order) -> dict[str, Any]:
+def _build_receipt(*, order: Order) -> dict[str, Any]:
     receipt: dict[str, Any] = {
         "customer": {"email": order.customer_email},
         "items": [
@@ -89,14 +92,12 @@ def _build_receipt(*, settings: Settings, order: Order) -> dict[str, Any]:
                     "value": _format_rub_amount(order.total_price),
                     "currency": "RUB",
                 },
-                "vat_code": settings.yookassa_vat_code,
+                "vat_code": YOOKASSA_VAT_CODE,
                 "payment_mode": "full_payment",
                 "payment_subject": "service",
             }
         ],
     }
-    if settings.yookassa_tax_system_code is not None:
-        receipt["tax_system_code"] = settings.yookassa_tax_system_code
     return receipt
 
 

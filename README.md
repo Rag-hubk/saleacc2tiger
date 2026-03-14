@@ -54,9 +54,6 @@ Telegram-бот витрины `NH | STORE01` для продажи:
 - `GOOGLE_SALES_WORKSHEET` default `sales`
 - `GOOGLE_ORDERS_WORKSHEET` legacy fallback for old deployments
 - `CHATGPT_STOCK_RESERVE_MINUTES` default `20`
-- `YOOKASSA_API_BASE` default `https://api.yookassa.ru/v3`
-- `YOOKASSA_VAT_CODE` default `1`
-- `YOOKASSA_TAX_SYSTEM_CODE`
 
 Требования к ссылкам:
 
