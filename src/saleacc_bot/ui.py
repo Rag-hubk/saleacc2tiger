@@ -58,7 +58,7 @@ SECTION_TEXTS = {
 _IMAGE_DIR = Path(__file__).resolve().parents[2] / "image"
 MAIN_MENU_IMAGE = _IMAGE_DIR / "стартфото.jpeg"
 SECTION_IMAGES = {
-    "chatgpt": _IMAGE_DIR / "Раздел ChatGPT.jpeg",
+    "chatgpt": _IMAGE_DIR / "раздел gpt2.jpeg",
     "gemini": _IMAGE_DIR / "Раздел Gemini.jpeg",
 }
 def main_menu_text() -> str:
