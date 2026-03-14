@@ -318,6 +318,20 @@ async def on_main(callback: CallbackQuery, state: FSMContext) -> None:
     await callback.answer()
 
 
+@router.callback_query(F.data == "main_new")
+async def on_main_new(callback: CallbackQuery, state: FSMContext) -> None:
+    await state.clear()
+    chat_id = callback.message.chat.id if callback.message is not None else callback.from_user.id
+    await _send_content(
+        bot=callback.bot,
+        chat_id=chat_id,
+        text=main_menu_text(),
+        reply_markup=user_reply_keyboard(),
+        photo_path=main_menu_image_path(),
+    )
+    await callback.answer()
+
+
 @router.callback_query(F.data == "catalog")
 async def on_catalog(callback: CallbackQuery) -> None:
     await _render_store_menu(callback)
@@ -368,22 +382,6 @@ async def on_product(callback: CallbackQuery) -> None:
     category = get_product_category(product.slug) or "chatgpt"
     back_callback = f"section:{category}"
     await _replace_message(callback, product_text(product), product_keyboard(product.slug, back_callback=back_callback))
-    await callback.answer()
-
-
-@router.callback_query(F.data == "group:pro")
-async def on_pro_group(callback: CallbackQuery) -> None:
-    async with get_session() as session:
-        products = [product for product in await list_active_products(session) if get_product_category(product.slug) == "chatgpt"]
-    if not products:
-        await callback.answer("Раздел временно недоступен.", show_alert=True)
-        return
-    await _replace_message(
-        callback,
-        section_text("chatgpt"),
-        section_keyboard(products),
-        photo_path=section_image_path("chatgpt"),
-    )
     await callback.answer()
 
 
@@ -489,20 +487,6 @@ async def on_email_message(message: Message, state: FSMContext) -> None:
     )
     if not ok:
         await message.answer(result)
-
-
-@router.callback_query(F.data.startswith("order_check:"))
-async def on_order_check(callback: CallbackQuery) -> None:
-    order_id = callback.data.split(":", maxsplit=1)[1]
-    async with get_session() as session:
-        order = await get_order(session, order_id)
-    if order is None or order.tg_user_id != callback.from_user.id:
-        await callback.answer("Заказ не найден.", show_alert=True)
-        return
-    ok, result = await _sync_order_from_provider(order_id=order_id, bot=callback.bot)
-    if ok:
-        await _render_main(callback)
-    await callback.answer(result, show_alert=not ok)
 
 
 @router.callback_query(F.data.startswith("order_cancel:"))

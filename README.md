@@ -50,7 +50,6 @@ Telegram-бот витрины `NH | STORE01` для продажи:
 
 - `GOOGLE_INVENTORY_WORKSHEET` default `inventory`
 - `GOOGLE_SALES_WORKSHEET` default `sales`
-- `GOOGLE_ORDERS_WORKSHEET` legacy fallback for old deployments
 - `CHATGPT_STOCK_RESERVE_MINUTES` default `20`
 
 Требования к ссылкам:

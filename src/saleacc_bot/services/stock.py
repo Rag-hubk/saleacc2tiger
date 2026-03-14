@@ -27,10 +27,6 @@ def order_needs_auto_delivery(order: Order) -> bool:
     return get_product_category(order.product_slug) == CHATGPT_STOCK_POOL
 
 
-async def sync_chatgpt_stock(session: AsyncSession, settings: Settings) -> int:
-    raise RuntimeError("ChatGPT stock is managed from Google Sheets inventory. CSV import is no longer used.")
-
-
 async def cleanup_expired_reservations(session: AsyncSession) -> None:
     expired_order_ids = await get_sheets_store().cleanup_expired_inventory_reservations()
     if not expired_order_ids:

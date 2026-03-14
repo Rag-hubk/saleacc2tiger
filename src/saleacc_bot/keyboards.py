@@ -42,7 +42,7 @@ def payment_result_keyboard(*, support_url: str | None = None) -> InlineKeyboard
     rows: list[list[InlineKeyboardButton]] = []
     if support_url and is_valid_http_url(support_url):
         rows.append([_button("📲 Поддержка", url=support_url)])
-    rows.append([_button("Главное меню", callback_data="main")])
+    rows.append([_button("Главное меню", callback_data="main_new")])
     return InlineKeyboardMarkup(inline_keyboard=rows)
 
 
