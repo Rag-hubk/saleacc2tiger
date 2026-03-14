@@ -52,8 +52,7 @@ def product_keyboard(product_slug: str, *, back_callback: str) -> InlineKeyboard
     return InlineKeyboardMarkup(
         inline_keyboard=[
             [_button("Оформить заказ", callback_data=f"buy:{product_slug}")],
-            [_button("Назад", callback_data=back_callback)],
-            [_button("В главное меню", callback_data="main")],
+            [_button("Назад", callback_data=back_callback), _button("В главное меню", callback_data="main")],
         ]
     )
 
@@ -63,8 +62,7 @@ def email_choice_keyboard(*, product_slug: str, email: str) -> InlineKeyboardMar
         inline_keyboard=[
             [_button(f"Использовать {email}", callback_data=f"email_use:{product_slug}")],
             [_button("Ввести другой e-mail", callback_data=f"email_change:{product_slug}")],
-            [_button("Назад", callback_data=f"product:{product_slug}")],
-            [_button("В главное меню", callback_data="main")],
+            [_button("Назад", callback_data=f"product:{product_slug}"), _button("В главное меню", callback_data="main")],
         ]
     )
 
