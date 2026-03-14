@@ -38,13 +38,13 @@ def support_keyboard(support_url: str) -> InlineKeyboardMarkup | None:
     return InlineKeyboardMarkup(inline_keyboard=[[_button("📲 Написать", url=support_url)]])
 
 
-def section_keyboard(products: list[Product], *, back_callback: str = "main") -> InlineKeyboardMarkup:
+def section_keyboard(products: list[Product], *, back_callback: str = "catalog") -> InlineKeyboardMarkup:
     rows: list[list[InlineKeyboardButton]] = []
     for product in products:
         spec = get_product_spec(product.slug)
         label = spec.button_title if spec is not None else product.title
         rows.append([_button(label, callback_data=f"product:{product.slug}")])
-    rows.append([_button("В главное меню", callback_data=back_callback)])
+    rows.append([_button("Назад", callback_data=back_callback)])
     return InlineKeyboardMarkup(inline_keyboard=rows)
 
 
