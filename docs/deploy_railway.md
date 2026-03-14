@@ -38,6 +38,8 @@ DATABASE_URL=${{Postgres.DATABASE_URL}}
 - `PUBLIC_OFFER_URL`
 - `DATABASE_URL`
 - `GOOGLE_SHEET_ID`
+- `GOOGLE_INVENTORY_WORKSHEET`
+- `GOOGLE_SALES_WORKSHEET`
 - `GOOGLE_ORDERS_WORKSHEET`
 - `GOOGLE_SERVICE_ACCOUNT_JSON_B64` или `GOOGLE_SERVICE_ACCOUNT_JSON`
 - `CHATGPT_STOCK_CSV_URL`
@@ -61,7 +63,7 @@ DATABASE_URL=${{Postgres.DATABASE_URL}}
 - удобно сгенерировать так: `base64 < google-service-account.json | tr -d '\n'`
 - в Google Cloud project этого service account должен быть включен `Google Sheets API`
 - саму таблицу нужно расшарить на service account email минимум с правами `Editor`
-- бот автосоздает и обновляет лист `orders`, если у service account есть доступ к таблице
+- бот автосоздает и обновляет листы `inventory` и `sales`, если у service account есть доступ к таблице
 
 Важно для GPT-стока:
 

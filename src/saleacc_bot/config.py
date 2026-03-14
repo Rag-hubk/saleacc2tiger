@@ -49,6 +49,8 @@ class Settings:
     google_service_account_file: str
     google_service_account_json: str
     google_service_account_json_b64: str
+    google_inventory_worksheet: str
+    google_sales_worksheet: str
     google_orders_worksheet: str
     chatgpt_stock_csv_url: str
     chatgpt_stock_csv_path: str
@@ -65,6 +67,10 @@ class Settings:
 @lru_cache(maxsize=1)
 def get_settings() -> Settings:
     tax_system_raw = _optional_env("YOOKASSA_TAX_SYSTEM_CODE")
+    legacy_orders_worksheet = (os.getenv("GOOGLE_ORDERS_WORKSHEET", "").strip() or "orders")
+    sales_worksheet = os.getenv("GOOGLE_SALES_WORKSHEET", "").strip()
+    if not sales_worksheet:
+        sales_worksheet = legacy_orders_worksheet if legacy_orders_worksheet and legacy_orders_worksheet != "orders" else "sales"
     return Settings(
         bot_token=_require_env("TELEGRAM_BOT_TOKEN"),
         admin_ids=_parse_admin_ids(os.getenv("TELEGRAM_ADMIN_IDS")),
@@ -75,7 +81,9 @@ def get_settings() -> Settings:
         google_service_account_file=_optional_env("GOOGLE_SERVICE_ACCOUNT_FILE"),
         google_service_account_json=_optional_env("GOOGLE_SERVICE_ACCOUNT_JSON"),
         google_service_account_json_b64=_optional_env("GOOGLE_SERVICE_ACCOUNT_JSON_B64"),
-        google_orders_worksheet=os.getenv("GOOGLE_ORDERS_WORKSHEET", "orders").strip() or "orders",
+        google_inventory_worksheet=os.getenv("GOOGLE_INVENTORY_WORKSHEET", "inventory").strip() or "inventory",
+        google_sales_worksheet=sales_worksheet,
+        google_orders_worksheet=legacy_orders_worksheet,
         chatgpt_stock_csv_url=_optional_env("CHATGPT_STOCK_CSV_URL"),
         chatgpt_stock_csv_path=_optional_env("CHATGPT_STOCK_CSV_PATH"),
         chatgpt_stock_reserve_minutes=_parse_int(os.getenv("CHATGPT_STOCK_RESERVE_MINUTES"), 20),

@@ -50,7 +50,9 @@ Telegram-бот витрины `NH | STORE01` для продажи:
 
 Опциональные:
 
-- `GOOGLE_ORDERS_WORKSHEET` default `orders`
+- `GOOGLE_INVENTORY_WORKSHEET` default `inventory`
+- `GOOGLE_SALES_WORKSHEET` default `sales`
+- `GOOGLE_ORDERS_WORKSHEET` legacy fallback for old deployments
 - `CHATGPT_STOCK_CSV_URL` direct URL to CSV export
 - `CHATGPT_STOCK_CSV_PATH` local CSV path for stock import
 - `CHATGPT_STOCK_RESERVE_MINUTES` default `20`
@@ -92,7 +94,12 @@ PYTHONPATH=src python3 scripts/import_chatgpt_stock.py
 PYTHONPATH=src python3 scripts/init_google_sheet.py
 ```
 
-По умолчанию бот автосоздает и поддерживает только лист `orders`.
+По умолчанию бот автосоздает и поддерживает две вкладки:
+
+- `inventory` — инвентарь и статусы `available / reserved / sold`
+- `sales` — только оплаченные продажи
+
+Если лист `inventory` пустой, бот добавляет по одной seed-строке на каждый активный продукт из каталога.
 
 Если в логах есть `APIError: [403]: Google Sheets API has not been used in project ... or it is disabled`, значит credentials валидны, но `Google Sheets API` выключен в GCP.
 
