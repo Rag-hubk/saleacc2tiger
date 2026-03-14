@@ -23,6 +23,7 @@ from saleacc_bot.url_utils import is_valid_http_url
 router = Router(name="admin")
 settings = get_settings()
 _broadcast_task: asyncio.Task | None = None
+_SUPPORTED_BROADCAST_TYPES = {"text", "photo", "video", "animation", "document"}
 
 
 def _is_admin(user_id: int) -> bool:
@@ -41,6 +42,23 @@ def _message_html(message: Message) -> str:
     if message.html_text:
         return message.html_text.strip()
     return html.escape((message.text or "").strip())
+
+
+def _extract_broadcast_payload(message: Message) -> dict[str, str]:
+    text = _message_html(message)
+
+    if message.photo:
+        return {"type": "photo", "file_id": message.photo[-1].file_id, "text": text}
+    if message.video:
+        return {"type": "video", "file_id": message.video.file_id, "text": text}
+    if message.animation:
+        return {"type": "animation", "file_id": message.animation.file_id, "text": text}
+    if message.document:
+        return {"type": "document", "file_id": message.document.file_id, "text": text}
+    if message.text:
+        return {"type": "text", "file_id": "", "text": text}
+
+    raise ValueError("Поддерживаются текст, фото, видео, GIF и документы.")
 
 
 def _parse_broadcast_buttons(raw: str) -> InlineKeyboardMarkup | None:
@@ -75,6 +93,8 @@ def _parse_broadcast_buttons(raw: str) -> InlineKeyboardMarkup | None:
 
 async def _send_broadcast_preview(message: Message, state: FSMContext) -> None:
     data = await state.get_data()
+    preview_type = str(data.get("broadcast_type") or "text")
+    preview_file_id = str(data.get("broadcast_file_id") or "")
     preview_text = str(data.get("broadcast_text") or "").strip()
     buttons_raw = str(data.get("broadcast_buttons_raw") or "")
     try:
@@ -84,7 +104,14 @@ async def _send_broadcast_preview(message: Message, state: FSMContext) -> None:
         return
 
     await message.answer("<b>Предпросмотр рассылки</b>", parse_mode="HTML")
-    await message.answer(preview_text, reply_markup=preview_markup, parse_mode="HTML", disable_web_page_preview=False)
+    await _send_broadcast_content(
+        bot=message.bot,
+        chat_id=message.chat.id,
+        content_type=preview_type,
+        file_id=preview_file_id,
+        text=preview_text,
+        reply_markup=preview_markup,
+    )
     await message.answer(
         "Проверь текст и кнопки. Если все ок, запускай рассылку.",
         reply_markup=admin_broadcast_preview_keyboard(),
@@ -95,7 +122,73 @@ def _broadcast_task_running() -> bool:
     return _broadcast_task is not None and not _broadcast_task.done()
 
 
-async def _run_broadcast(*, bot, admin_id: int, text: str, reply_markup: InlineKeyboardMarkup | None) -> None:
+async def _send_broadcast_content(
+    *,
+    bot,
+    chat_id: int,
+    content_type: str,
+    file_id: str,
+    text: str,
+    reply_markup: InlineKeyboardMarkup | None,
+) -> None:
+    caption = text or None
+    if content_type == "text":
+        await bot.send_message(
+            chat_id=chat_id,
+            text=text,
+            reply_markup=reply_markup,
+            parse_mode="HTML",
+            disable_web_page_preview=False,
+        )
+        return
+    if content_type == "photo":
+        await bot.send_photo(
+            chat_id=chat_id,
+            photo=file_id,
+            caption=caption,
+            reply_markup=reply_markup,
+            parse_mode="HTML",
+        )
+        return
+    if content_type == "video":
+        await bot.send_video(
+            chat_id=chat_id,
+            video=file_id,
+            caption=caption,
+            reply_markup=reply_markup,
+            parse_mode="HTML",
+        )
+        return
+    if content_type == "animation":
+        await bot.send_animation(
+            chat_id=chat_id,
+            animation=file_id,
+            caption=caption,
+            reply_markup=reply_markup,
+            parse_mode="HTML",
+        )
+        return
+    if content_type == "document":
+        await bot.send_document(
+            chat_id=chat_id,
+            document=file_id,
+            caption=caption,
+            reply_markup=reply_markup,
+            parse_mode="HTML",
+        )
+        return
+    raise ValueError(f"Unsupported broadcast content type: {content_type}")
+
+
+async def _run_broadcast(
+    *,
+    bot,
+    admin_id: int,
+    content_type: str,
+    file_id: str,
+    text: str,
+    reply_markup: InlineKeyboardMarkup | None,
+) -> None:
     blocked_user_ids: list[int] = []
     delivered = 0
     failed = 0
@@ -106,12 +199,13 @@ async def _run_broadcast(*, bot, admin_id: int, text: str, reply_markup: InlineK
 
         for index, user_id in enumerate(user_ids, start=1):
             try:
-                await bot.send_message(
+                await _send_broadcast_content(
+                    bot=bot,
                     chat_id=user_id,
+                    content_type=content_type,
+                    file_id=file_id,
                     text=text,
                     reply_markup=reply_markup,
-                    parse_mode="HTML",
-                    disable_web_page_preview=False,
                 )
                 delivered += 1
             except TelegramForbiddenError:
@@ -321,9 +415,11 @@ async def on_admin_broadcast(callback: CallbackQuery, state: FSMContext) -> None
         callback,
         (
             "<b>Рассылка</b>\n\n"
-            "Отправь следующим сообщением текст рассылки.\n"
-            "Поддерживается обычное Telegram-форматирование: жирный, курсив, ссылки.\n\n"
-            "После текста я запрошу inline-кнопки и покажу предпросмотр."
+            "Отправь следующим сообщением контент рассылки.\n"
+            "Поддерживаются: текст, фото, видео, GIF, документ.\n"
+            "Для медиа можно добавить подпись.\n"
+            "Форматирование Telegram сохранится.\n\n"
+            "После контента я запрошу inline-кнопки и покажу предпросмотр."
         ),
         admin_back_keyboard(),
     )
@@ -335,11 +431,19 @@ async def on_broadcast_text(message: Message, state: FSMContext) -> None:
     if not _is_admin(message.from_user.id):
         await state.clear()
         return
-    text = _message_html(message)
-    if not text:
+    try:
+        payload = _extract_broadcast_payload(message)
+    except ValueError as exc:
+        await message.answer(str(exc))
+        return
+    if payload["type"] == "text" and not payload["text"]:
         await message.answer("Текст рассылки пустой. Отправь текст еще раз.")
         return
-    await state.update_data(broadcast_text=text)
+    await state.update_data(
+        broadcast_type=payload["type"],
+        broadcast_file_id=payload["file_id"],
+        broadcast_text=payload["text"],
+    )
     await state.set_state(AdminBroadcastStates.waiting_for_buttons)
     await message.answer(
         (
@@ -373,7 +477,11 @@ async def on_broadcast_edit_text(callback: CallbackQuery, state: FSMContext) -> 
         await callback.answer("Нет доступа.", show_alert=True)
         return
     await state.set_state(AdminBroadcastStates.waiting_for_text)
-    await _replace_admin_message(callback, "Отправь новый текст рассылки.", admin_back_keyboard())
+    await _replace_admin_message(
+        callback,
+        "Отправь новый контент рассылки: текст, фото, видео, GIF или документ.",
+        admin_back_keyboard(),
+    )
     await callback.answer()
 
 
@@ -418,9 +526,15 @@ async def on_broadcast_send(callback: CallbackQuery, state: FSMContext) -> None:
         return
 
     data = await state.get_data()
+    content_type = str(data.get("broadcast_type") or "").strip()
+    file_id = str(data.get("broadcast_file_id") or "")
     text = str(data.get("broadcast_text") or "").strip()
     buttons_raw = str(data.get("broadcast_buttons_raw") or "")
-    if not text:
+    if content_type not in _SUPPORTED_BROADCAST_TYPES:
+        await state.clear()
+        await callback.answer("Контент рассылки потерян. Начни заново.", show_alert=True)
+        return
+    if content_type == "text" and not text:
         await state.clear()
         await callback.answer("Текст рассылки потерян. Начни заново.", show_alert=True)
         return
@@ -442,6 +556,8 @@ async def on_broadcast_send(callback: CallbackQuery, state: FSMContext) -> None:
         _run_broadcast(
             bot=callback.bot,
             admin_id=callback.from_user.id,
+            content_type=content_type,
+            file_id=file_id,
             text=text,
             reply_markup=reply_markup,
         )

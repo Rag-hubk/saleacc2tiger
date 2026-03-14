@@ -102,7 +102,7 @@ def admin_broadcast_preview_keyboard() -> InlineKeyboardMarkup:
     return InlineKeyboardMarkup(
         inline_keyboard=[
             [_button("✅ Отправить", callback_data="admin_broadcast_send")],
-            [_button("✏️ Изменить текст", callback_data="admin_broadcast_edit_text")],
+            [_button("✏️ Изменить контент", callback_data="admin_broadcast_edit_text")],
             [_button("🔘 Изменить кнопки", callback_data="admin_broadcast_edit_buttons")],
             [_button("❌ Отменить", callback_data="admin_broadcast_cancel")],
         ]
