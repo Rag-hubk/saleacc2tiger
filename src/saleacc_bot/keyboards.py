@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from aiogram.types import InlineKeyboardButton, InlineKeyboardMarkup
+from aiogram.types import InlineKeyboardButton, InlineKeyboardMarkup, KeyboardButton, ReplyKeyboardMarkup
 
 from saleacc_bot.models import Product
 from saleacc_bot.services.catalog import get_product_spec
@@ -13,19 +13,29 @@ def _button(text: str, *, callback_data: str | None = None, url: str | None = No
     return InlineKeyboardButton(text=text, url=url)
 
 
-def main_menu_keyboard(*, is_admin: bool, support_url: str) -> InlineKeyboardMarkup:
-    support_button = (
-        _button("Поддержка", url=support_url)
-        if is_valid_http_url(support_url)
-        else _button("Поддержка", callback_data="support_unavailable")
-    )
+def main_menu_keyboard(*, is_admin: bool) -> InlineKeyboardMarkup:
     rows = [
         [_button("🟢 ChatGPT", callback_data="section:chatgpt"), _button("🔵 Gemini", callback_data="section:gemini")],
-        [_button("Мои заказы", callback_data="orders"), support_button],
     ]
     if is_admin:
         rows.append([_button("Админ", callback_data="admin_panel")])
     return InlineKeyboardMarkup(inline_keyboard=rows)
+
+
+def user_reply_keyboard() -> ReplyKeyboardMarkup:
+    return ReplyKeyboardMarkup(
+        keyboard=[
+            [KeyboardButton(text="📲Помощь"), KeyboardButton(text="🛍 Магазин")],
+        ],
+        resize_keyboard=True,
+        is_persistent=True,
+    )
+
+
+def support_keyboard(support_url: str) -> InlineKeyboardMarkup | None:
+    if not is_valid_http_url(support_url):
+        return None
+    return InlineKeyboardMarkup(inline_keyboard=[[_button("📲 Написать", url=support_url)]])
 
 
 def section_keyboard(products: list[Product], *, back_callback: str = "main") -> InlineKeyboardMarkup:

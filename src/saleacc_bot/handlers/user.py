@@ -16,6 +16,8 @@ from saleacc_bot.keyboards import (
     pay_order_keyboard,
     product_keyboard,
     section_keyboard,
+    support_keyboard,
+    user_reply_keyboard,
 )
 from saleacc_bot.services.catalog import get_product_by_slug, get_product_category, list_active_products
 from saleacc_bot.services.notifications import notify_order_paid
@@ -49,6 +51,11 @@ router = Router(name="user")
 settings = get_settings()
 yookassa_client = YooKassaClient(settings)
 EMAIL_RE = re.compile(r"^[A-Z0-9._%+\-]+@[A-Z0-9.\-]+\.[A-Z]{2,}$", re.IGNORECASE)
+HELP_TEXT = (
+    "💬 <b>Поддержка</b>\n"
+    "Если есть вопрос или проблема — пиши:\n\n"
+    "Отвечаем с 9:00 до 23:00 МСК"
+)
 
 
 async def _send_content(*, bot, chat_id: int, text: str, reply_markup=None, photo_path=None) -> None:
@@ -88,6 +95,19 @@ async def _replace_message(callback: CallbackQuery, text: str, reply_markup=None
 async def _render_main(callback: CallbackQuery) -> None:
     text, keyboard = main_menu_payload(settings, callback.from_user.id)
     await _replace_message(callback, text, keyboard, photo_path=main_menu_image_path())
+
+
+async def _show_main_menu_for_message(message: Message, state: FSMContext | None = None) -> None:
+    if state is not None:
+        await state.clear()
+    text, keyboard = main_menu_payload(settings, message.from_user.id)
+    await _send_content(
+        bot=message.bot,
+        chat_id=message.chat.id,
+        text=text,
+        reply_markup=keyboard,
+        photo_path=main_menu_image_path(),
+    )
 
 
 async def _start_checkout(*, chat_id: int, user_id: int, username: str | None, product_slug: str, email: str, bot) -> tuple[bool, str]:
@@ -247,14 +267,25 @@ async def on_start(message: Message, state: FSMContext) -> None:
             first_name=message.from_user.first_name,
             last_name=message.from_user.last_name,
         )
-    text, keyboard = main_menu_payload(settings, message.from_user.id)
-    await _send_content(
-        bot=message.bot,
-        chat_id=message.chat.id,
-        text=text,
-        reply_markup=keyboard,
-        photo_path=main_menu_image_path(),
-    )
+    await message.answer("Быстрая навигация снизу.", reply_markup=user_reply_keyboard())
+    await _show_main_menu_for_message(message)
+
+
+@router.message(F.text == "🛍 Магазин")
+async def on_store_message(message: Message, state: FSMContext) -> None:
+    await _show_main_menu_for_message(message, state)
+
+
+@router.message(F.text == "📲Помощь")
+async def on_help_message(message: Message) -> None:
+    keyboard = support_keyboard(settings.support_url)
+    if keyboard is None:
+        await message.answer(
+            HELP_TEXT + "\n\nПоддержка временно недоступна. Администратору нужно исправить SUPPORT_URL.",
+            parse_mode="HTML",
+        )
+        return
+    await message.answer(HELP_TEXT, reply_markup=keyboard, parse_mode="HTML")
 
 
 @router.callback_query(F.data == "main")

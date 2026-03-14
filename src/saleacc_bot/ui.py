@@ -62,7 +62,7 @@ def is_admin(settings: Settings, user_id: int) -> bool:
 
 
 def main_menu_payload(settings: Settings, user_id: int) -> tuple[str, InlineKeyboardMarkup]:
-    return MAIN_MENU_TEXT, main_menu_keyboard(is_admin=is_admin(settings, user_id), support_url=settings.support_url)
+    return MAIN_MENU_TEXT, main_menu_keyboard(is_admin=is_admin(settings, user_id))
 
 
 def main_menu_image_path() -> Path:
