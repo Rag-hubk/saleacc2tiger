@@ -25,13 +25,22 @@ async def notify_order_paid(
             parse_mode="HTML",
         )
         main_text, main_keyboard = main_menu_payload(settings, order.tg_user_id)
-        await bot.send_photo(
-            chat_id=order.tg_user_id,
-            photo=FSInputFile(str(main_menu_image_path())),
-            caption=main_text,
-            reply_markup=main_keyboard,
-            parse_mode="HTML",
-        )
+        image_path = main_menu_image_path()
+        if image_path.is_file():
+            await bot.send_photo(
+                chat_id=order.tg_user_id,
+                photo=FSInputFile(str(image_path)),
+                caption=main_text,
+                reply_markup=main_keyboard,
+                parse_mode="HTML",
+            )
+        else:
+            await bot.send_message(
+                chat_id=order.tg_user_id,
+                text=main_text,
+                reply_markup=main_keyboard,
+                parse_mode="HTML",
+            )
     except (TelegramBadRequest, TelegramForbiddenError):
         pass
 

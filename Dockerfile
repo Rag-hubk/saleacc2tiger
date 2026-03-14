@@ -16,6 +16,7 @@ RUN pip install --upgrade pip \
 
 COPY src /app/src
 COPY scripts /app/scripts
+COPY image /app/image
 COPY pyproject.toml /app/pyproject.toml
 COPY README.md /app/README.md
 COPY .env.example /app/.env.example

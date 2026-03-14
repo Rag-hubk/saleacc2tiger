@@ -52,7 +52,7 @@ EMAIL_RE = re.compile(r"^[A-Z0-9._%+\-]+@[A-Z0-9.\-]+\.[A-Z]{2,}$", re.IGNORECAS
 
 
 async def _send_content(*, bot, chat_id: int, text: str, reply_markup=None, photo_path=None) -> None:
-    if photo_path is not None:
+    if photo_path is not None and photo_path.is_file():
         await bot.send_photo(
             chat_id=chat_id,
             photo=FSInputFile(str(photo_path)),
