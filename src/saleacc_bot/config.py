@@ -72,7 +72,7 @@ def get_settings() -> Settings:
         admin_ids=_parse_admin_ids(os.getenv("TELEGRAM_ADMIN_IDS")),
         support_url=normalize_public_url(os.getenv("SUPPORT_URL", "https://t.me/your_support_username")),
         public_offer_url=normalize_public_url(os.getenv("PUBLIC_OFFER_URL", "https://example.com/oferta")),
-        database_url=os.getenv("DATABASE_URL", "sqlite+aiosqlite:///data/storage/bot.db").strip(),
+        database_url=_require_env("DATABASE_URL"),
         google_sheet_id=_require_env("GOOGLE_SHEET_ID"),
         google_service_account_file=_optional_env("GOOGLE_SERVICE_ACCOUNT_FILE"),
         google_service_account_json=_optional_env("GOOGLE_SERVICE_ACCOUNT_JSON"),
