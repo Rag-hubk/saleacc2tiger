@@ -267,7 +267,7 @@ async def on_start(message: Message, state: FSMContext) -> None:
             first_name=message.from_user.first_name,
             last_name=message.from_user.last_name,
         )
-    await message.answer("Быстрая навигация снизу.", reply_markup=user_reply_keyboard())
+    await message.answer("\u2060", reply_markup=user_reply_keyboard())
     await _show_main_menu_for_message(message)
 
 
