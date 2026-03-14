@@ -262,6 +262,11 @@ async def on_orders(callback: CallbackQuery) -> None:
     await callback.answer()
 
 
+@router.callback_query(F.data == "support_unavailable")
+async def on_support_unavailable(callback: CallbackQuery) -> None:
+    await callback.answer("Поддержка временно недоступна. Администратору нужно исправить SUPPORT_URL.", show_alert=True)
+
+
 @router.callback_query(F.data.startswith("product:"))
 async def on_product(callback: CallbackQuery) -> None:
     product_slug = callback.data.split(":", maxsplit=1)[1]

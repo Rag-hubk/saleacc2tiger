@@ -6,6 +6,7 @@ from saleacc_bot.config import Settings
 from saleacc_bot.keyboards import main_menu_keyboard
 from saleacc_bot.models import Order, Product
 from saleacc_bot.services.catalog import get_product_category, get_product_spec
+from saleacc_bot.url_utils import is_valid_http_url
 
 MAIN_MENU_TEXT = (
     "👋 <b>Добро пожаловать в NH | STORE01!</b>\n\n"
@@ -83,6 +84,11 @@ def payment_caption(*, product: Product, email: str, order_id: str, offer_url: s
         if category == "chatgpt"
         else "После оплаты доступ по этому тарифу выдается вручную в бота в течение 1-24 часов."
     )
+    offer_line = (
+        f"Оплачивая заказ, вы подтверждаете согласие с <a href=\"{offer_url}\">публичной офертой</a>."
+        if is_valid_http_url(offer_url)
+        else "Оплачивая заказ, вы подтверждаете согласие с публичной офертой."
+    )
     return (
         "<b>Заказ оформлен</b>\n\n"
         f"<b>Тариф:</b> {product.title}\n"
@@ -90,7 +96,7 @@ def payment_caption(*, product: Product, email: str, order_id: str, offer_url: s
         f"<b>E-mail для чека:</b> <code>{email}</code>\n"
         f"<b>Номер заказа:</b> <code>{order_id[:8]}</code>\n\n"
         f"<blockquote>{delivery_block}</blockquote>\n\n"
-        f"Оплачивая заказ, вы подтверждаете согласие с <a href=\"{offer_url}\">публичной офертой</a>."
+        f"{offer_line}"
     )
 
 

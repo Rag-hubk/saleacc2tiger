@@ -4,6 +4,7 @@ from aiogram.types import InlineKeyboardButton, InlineKeyboardMarkup
 
 from saleacc_bot.models import Product
 from saleacc_bot.services.catalog import get_product_spec
+from saleacc_bot.url_utils import is_valid_http_url
 
 
 def _button(text: str, *, callback_data: str | None = None, url: str | None = None) -> InlineKeyboardButton:
@@ -13,9 +14,14 @@ def _button(text: str, *, callback_data: str | None = None, url: str | None = No
 
 
 def main_menu_keyboard(*, is_admin: bool, support_url: str) -> InlineKeyboardMarkup:
+    support_button = (
+        _button("Поддержка", url=support_url)
+        if is_valid_http_url(support_url)
+        else _button("Поддержка", callback_data="support_unavailable")
+    )
     rows = [
         [_button("🟢 ChatGPT", callback_data="section:chatgpt"), _button("🔵 Gemini", callback_data="section:gemini")],
-        [_button("Мои заказы", callback_data="orders"), _button("Поддержка", url=support_url)],
+        [_button("Мои заказы", callback_data="orders"), support_button],
     ]
     if is_admin:
         rows.append([_button("Админ", callback_data="admin_panel")])

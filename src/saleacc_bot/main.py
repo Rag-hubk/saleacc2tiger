@@ -1,16 +1,18 @@
 from __future__ import annotations
 
 import asyncio
+import logging
 
 from aiogram import Bot, Dispatcher
 
 from saleacc_bot.config import get_settings
-from saleacc_bot.db import init_db
+from saleacc_bot.db import get_session, init_db
 from saleacc_bot.handlers import admin, user
 from saleacc_bot.services.catalog import seed_default_products
 from saleacc_bot.services.sheets_store import get_sheets_store
 from saleacc_bot.services.stock import cleanup_expired_reservations
-from saleacc_bot.db import get_session
+
+logger = logging.getLogger(__name__)
 
 
 async def start_polling() -> None:
@@ -29,7 +31,9 @@ async def start_polling() -> None:
     dp.include_router(user.router)
 
     try:
-        await dp.start_polling(bot)
+        await bot.delete_webhook(drop_pending_updates=False)
+        logger.info("Bot polling started")
+        await dp.start_polling(bot, allowed_updates=dp.resolve_used_update_types())
     finally:
         await bot.session.close()
 

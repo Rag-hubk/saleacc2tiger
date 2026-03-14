@@ -28,6 +28,7 @@ DATABASE_URL=${{Postgres.DATABASE_URL}}
 Настройки:
 
 - Start Command: `./scripts/start_bot_railway.sh`
+- Replicas: `1`
 
 Переменные:
 
@@ -48,6 +49,11 @@ DATABASE_URL=${{Postgres.DATABASE_URL}}
 - `YOOKASSA_VAT_CODE`
 - `YOOKASSA_TAX_SYSTEM_CODE`
 
+Важно для ссылок:
+
+- `SUPPORT_URL` должен быть полным `https://...` URL или `@username`
+- `PUBLIC_OFFER_URL` должен быть полным `https://...` URL
+
 Важно для Google credentials:
 
 - `GOOGLE_SERVICE_ACCOUNT_JSON_B64` должен содержать base64 от полного JSON-файла service account
@@ -55,6 +61,7 @@ DATABASE_URL=${{Postgres.DATABASE_URL}}
 - удобно сгенерировать так: `base64 < google-service-account.json | tr -d '\n'`
 - в Google Cloud project этого service account должен быть включен `Google Sheets API`
 - саму таблицу нужно расшарить на service account email минимум с правами `Editor`
+- бот автосоздает и обновляет лист `orders`, если у service account есть доступ к таблице
 
 Важно для GPT-стока:
 
@@ -68,6 +75,11 @@ DATABASE_URL=${{Postgres.DATABASE_URL}}
 
 - Start Command: `./scripts/start_webhook_railway.sh`
 - Healthcheck Path: `/health`
+
+Важно:
+
+- у `webhook` обязательно должен быть свой `Start Command`
+- если оставить сервис без него, Railway возьмет `Dockerfile CMD` и может поднять второй polling-бот вместо webhook
 
 Переменные нужны те же, что и для `bot`.
 
@@ -89,5 +101,6 @@ https://<your-webhook-domain>/webhooks/yookassa
 ## 6. Проверка
 
 - `bot` должен стартовать без ошибок миграции
+- у `bot` должен быть только один активный инстанс, иначе будет `TelegramConflictError`
 - `webhook` должен отвечать `200 OK` на `/health`
 - после тестовой оплаты заказ должен сменить статус в БД и в Google Sheets

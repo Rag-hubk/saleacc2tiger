@@ -5,6 +5,7 @@ from dataclasses import dataclass
 from functools import lru_cache
 
 from dotenv import load_dotenv
+from saleacc_bot.url_utils import normalize_public_url
 
 load_dotenv()
 
@@ -67,8 +68,8 @@ def get_settings() -> Settings:
     return Settings(
         bot_token=_require_env("TELEGRAM_BOT_TOKEN"),
         admin_ids=_parse_admin_ids(os.getenv("TELEGRAM_ADMIN_IDS")),
-        support_url=os.getenv("SUPPORT_URL", "https://t.me/your_support_username").strip(),
-        public_offer_url=os.getenv("PUBLIC_OFFER_URL", "https://example.com/oferta").strip(),
+        support_url=normalize_public_url(os.getenv("SUPPORT_URL", "https://t.me/your_support_username")),
+        public_offer_url=normalize_public_url(os.getenv("PUBLIC_OFFER_URL", "https://example.com/oferta")),
         database_url=os.getenv("DATABASE_URL", "sqlite+aiosqlite:///data/storage/bot.db").strip(),
         google_sheet_id=_require_env("GOOGLE_SHEET_ID"),
         google_service_account_file=_optional_env("GOOGLE_SERVICE_ACCOUNT_FILE"),

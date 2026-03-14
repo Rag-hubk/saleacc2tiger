@@ -58,6 +58,11 @@ Telegram-бот витрины `NH | STORE01` для продажи:
 - `YOOKASSA_VAT_CODE` default `1`
 - `YOOKASSA_TAX_SYSTEM_CODE`
 
+Требования к ссылкам:
+
+- `SUPPORT_URL` должен быть полным `https://...` URL или `@username`
+- `PUBLIC_OFFER_URL` должен быть полным `https://...` URL
+
 ## CSV stock
 
 Для автовыдачи `ChatGPT` бот ожидает CSV с колонками:
@@ -87,6 +92,8 @@ PYTHONPATH=src python3 scripts/import_chatgpt_stock.py
 PYTHONPATH=src python3 scripts/init_google_sheet.py
 ```
 
+По умолчанию бот автосоздает и поддерживает только лист `orders`.
+
 Если в логах есть `APIError: [403]: Google Sheets API has not been used in project ... or it is disabled`, значит credentials валидны, но `Google Sheets API` выключен в GCP.
 
 ## Локальный запуск
@@ -110,3 +117,5 @@ PYTHONPATH=src uvicorn saleacc_bot.webhook_app:app --host 0.0.0.0 --port 8000
 - `bot`: `./scripts/start_bot_railway.sh`
 - `webhook`: `./scripts/start_webhook_railway.sh`
 - инструкция: `docs/deploy_railway.md`
+- у `bot` должен быть ровно `1 replica`, иначе Telegram вернет `Conflict: terminated by other getUpdates request`
+- у `webhook` обязательно должен быть свой `Start Command`, иначе Railway может запустить там второй polling-бот из `Dockerfile CMD`
