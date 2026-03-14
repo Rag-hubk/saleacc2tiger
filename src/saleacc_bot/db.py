@@ -115,15 +115,6 @@ async def _ensure_order_columns(conn: AsyncConnection) -> None:
     await _add_column_if_missing(conn, "orders", "cancellation_reason", "VARCHAR(255)")
     await _add_column_if_missing(conn, "orders", "paid_at", "TIMESTAMP")
     await _add_column_if_missing(conn, "orders", "cancelled_at", "TIMESTAMP")
-
-    if await _column_exists(conn, "orders", "provider_charge_id"):
-        await _backfill_column_if_present(
-            conn,
-            table="orders",
-            column="provider_payment_id",
-            expression="provider_charge_id",
-            condition="provider_payment_id IS NULL AND provider_charge_id IS NOT NULL",
-        )
     await _backfill_column_if_present(
         conn,
         table="orders",

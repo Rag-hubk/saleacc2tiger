@@ -13,7 +13,7 @@ def _button(text: str, *, callback_data: str | None = None, url: str | None = No
 
 def main_menu_keyboard(*, is_admin: bool, support_url: str) -> InlineKeyboardMarkup:
     rows = [
-        [_button("Каталог", callback_data="catalog")],
+        [_button("Тарифы", callback_data="catalog")],
         [_button("Мои заказы", callback_data="orders"), _button("Поддержка", url=support_url)],
     ]
     if is_admin:
@@ -27,9 +27,9 @@ def catalog_keyboard(products: list[Product]) -> InlineKeyboardMarkup:
 
     rows: list[list[InlineKeyboardButton]] = []
     if plus_product is not None:
-        rows.append([_button("ChatGPT Plus", callback_data=f"product:{plus_product.slug}")])
+        rows.append([_button("ChatGPT Plus · 1 месяц", callback_data=f"product:{plus_product.slug}")])
     if pro_products:
-        rows.append([_button("ChatGPT Pro", callback_data="group:pro")])
+        rows.append([_button("ChatGPT Pro · выбрать срок", callback_data="group:pro")])
     rows.append([_button("Назад", callback_data="main")])
     return InlineKeyboardMarkup(inline_keyboard=rows)
 
@@ -37,7 +37,7 @@ def catalog_keyboard(products: list[Product]) -> InlineKeyboardMarkup:
 def product_keyboard(product_slug: str, *, back_callback: str = "catalog") -> InlineKeyboardMarkup:
     return InlineKeyboardMarkup(
         inline_keyboard=[
-            [_button("Купить", callback_data=f"buy:{product_slug}")],
+            [_button("Оформить заказ", callback_data=f"buy:{product_slug}")],
             [_button("Назад", callback_data=back_callback)],
         ]
     )
@@ -65,7 +65,7 @@ def email_choice_keyboard(*, product_slug: str, email: str) -> InlineKeyboardMar
 def pay_order_keyboard(*, confirmation_url: str, order_id: str) -> InlineKeyboardMarkup:
     return InlineKeyboardMarkup(
         inline_keyboard=[
-            [_button("Перейти к оплате", url=confirmation_url)],
+            [_button("Оплатить через ЮKassa", url=confirmation_url)],
             [_button("Проверить оплату", callback_data=f"order_check:{order_id}")],
             [_button("Отменить заказ", callback_data=f"order_cancel:{order_id}")],
         ]

@@ -34,7 +34,6 @@ async def create_order(
         product_slug=product.slug,
         product_title=product.title,
         quantity=1,
-        payment_method="yookassa",
         currency="RUB",
         unit_price=product.price_kopecks,
         total_price=product.price_kopecks,

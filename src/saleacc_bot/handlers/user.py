@@ -249,8 +249,8 @@ async def on_buy(callback: CallbackQuery, state: FSMContext) -> None:
             callback,
             (
                 f"<b>{product.title}</b>\n\n"
-                f"Сохраненный e-mail для чека: <code>{user.email}</code>\n"
-                "Можно использовать его или ввести новый."
+                f"<b>Сохраненный e-mail для чека:</b> <code>{user.email}</code>\n\n"
+                "Можно использовать этот адрес или указать другой."
             ),
             email_choice_keyboard(product_slug=product_slug, email=user.email),
         )
@@ -260,7 +260,7 @@ async def on_buy(callback: CallbackQuery, state: FSMContext) -> None:
             callback,
             (
                 f"<b>{product.title}</b>\n\n"
-                "Отправьте e-mail, который нужно передать в ЮKassa для чека."
+                "Отправьте e-mail, который нужно передать в ЮKassa для электронного чека."
             ),
         )
     await callback.answer()
@@ -274,7 +274,7 @@ async def on_email_use(callback: CallbackQuery, state: FSMContext) -> None:
     if user is None or not user.email:
         await state.update_data(product_slug=product_slug)
         await state.set_state(CheckoutStates.waiting_for_email)
-        await _safe_edit(callback, "Отправьте e-mail для чека.")
+        await _safe_edit(callback, "Отправьте e-mail для электронного чека.")
         await callback.answer()
         return
 
@@ -300,7 +300,7 @@ async def on_email_change(callback: CallbackQuery, state: FSMContext) -> None:
     product_slug = callback.data.split(":", maxsplit=1)[1]
     await state.update_data(product_slug=product_slug)
     await state.set_state(CheckoutStates.waiting_for_email)
-    await _safe_edit(callback, "Отправьте новый e-mail для чека.")
+    await _safe_edit(callback, "Отправьте новый e-mail для электронного чека.")
     await callback.answer()
 
 
@@ -308,14 +308,14 @@ async def on_email_change(callback: CallbackQuery, state: FSMContext) -> None:
 async def on_email_message(message: Message, state: FSMContext) -> None:
     email = (message.text or "").strip()
     if not EMAIL_RE.match(email):
-        await message.answer("Некорректный e-mail. Отправьте адрес в формате name@example.com")
+        await message.answer("Некорректный e-mail. Отправьте адрес в формате <code>name@example.com</code>", parse_mode="HTML")
         return
 
     data = await state.get_data()
     product_slug = str(data.get("product_slug") or "").strip()
     if not product_slug:
         await state.clear()
-        await message.answer("Не найден выбранный тариф. Начните заново через /start")
+        await message.answer("Не удалось определить выбранный тариф. Начните заново через /start")
         return
 
     async with get_session() as session:
