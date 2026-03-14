@@ -3,6 +3,8 @@ from __future__ import annotations
 import re
 
 from aiogram import F, Router
+from contextlib import suppress
+
 from aiogram.exceptions import TelegramBadRequest
 from aiogram.filters import CommandStart
 from aiogram.fsm.context import FSMContext
@@ -267,7 +269,9 @@ async def on_start(message: Message, state: FSMContext) -> None:
             first_name=message.from_user.first_name,
             last_name=message.from_user.last_name,
         )
-    await message.answer("\u2060", reply_markup=user_reply_keyboard())
+    nav_message = await message.answer("\u2060", reply_markup=user_reply_keyboard())
+    with suppress(TelegramBadRequest):
+        await nav_message.delete()
     await _show_main_menu_for_message(message)
 
 
