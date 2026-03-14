@@ -21,10 +21,10 @@ cp .env.example .env
 - или пропиши `GOOGLE_SERVICE_ACCOUNT_JSON`
 - или пропиши `GOOGLE_SERVICE_ACCOUNT_JSON_B64`
 
-4. Для автовыдачи `ChatGPT` настрой источник CSV-стока:
+4. Для автовыдачи `ChatGPT` заполни лист `inventory` в Google Sheets:
 
-- пропиши `CHATGPT_STOCK_CSV_URL`
-- или `CHATGPT_STOCK_CSV_PATH`
+- по одной строке на один аккаунт
+- укажи `product_key`, `status=available`, `access_login`, `access_secret`, `note`
 
 5. Первый деплой:
 

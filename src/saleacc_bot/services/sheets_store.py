@@ -5,7 +5,7 @@ import base64
 import json
 import logging
 from dataclasses import dataclass
-from datetime import datetime, timezone
+from datetime import datetime, timedelta, timezone
 from functools import lru_cache
 
 import gspread
@@ -15,8 +15,8 @@ from sqlalchemy import select
 
 from saleacc_bot.config import Settings, get_settings
 from saleacc_bot.db import get_session
-from saleacc_bot.models import Order, StockAccount
-from saleacc_bot.services.catalog import get_product_category, list_active_products
+from saleacc_bot.models import Order
+from saleacc_bot.services.catalog import get_product_category, get_product_spec
 
 SALES_HEADERS = [
     "sale_id",
@@ -81,8 +81,8 @@ class SheetsStore:
                 return False
             try:
                 await asyncio.to_thread(self._ensure_schema_sync)
+                await asyncio.to_thread(self._seed_inventory_sync)
                 await self._sync_sales_locked()
-                await self._sync_inventory_locked()
             except GoogleSheetsUnavailableError as exc:
                 self._disable(str(exc))
                 return False
@@ -94,7 +94,71 @@ class SheetsStore:
                 return
             try:
                 await self._sync_sales_locked()
-                await self._sync_inventory_locked()
+            except GoogleSheetsUnavailableError as exc:
+                self._disable(str(exc))
+
+    async def cleanup_expired_inventory_reservations(self) -> list[str]:
+        async with self._lock:
+            if self._disabled_reason:
+                return []
+            try:
+                return await asyncio.to_thread(self._cleanup_expired_inventory_reservations_sync)
+            except GoogleSheetsUnavailableError as exc:
+                self._disable(str(exc))
+                return []
+
+    async def reserve_inventory_item(
+        self,
+        *,
+        order_id: str,
+        product_key: str,
+        product_title: str,
+        reserve_minutes: int,
+    ) -> dict[str, str] | None:
+        async with self._lock:
+            if self._disabled_reason:
+                raise RuntimeError(self._disabled_reason)
+            try:
+                return await asyncio.to_thread(
+                    self._reserve_inventory_item_sync,
+                    order_id,
+                    product_key,
+                    product_title,
+                    reserve_minutes,
+                )
+            except GoogleSheetsUnavailableError as exc:
+                self._disable(str(exc))
+                return None
+
+    async def claim_inventory_item(
+        self,
+        *,
+        order_id: str,
+        product_key: str,
+        product_title: str,
+        reserve_minutes: int,
+    ) -> dict[str, str] | None:
+        async with self._lock:
+            if self._disabled_reason:
+                raise RuntimeError(self._disabled_reason)
+            try:
+                return await asyncio.to_thread(
+                    self._claim_inventory_item_sync,
+                    order_id,
+                    product_key,
+                    product_title,
+                    reserve_minutes,
+                )
+            except GoogleSheetsUnavailableError as exc:
+                self._disable(str(exc))
+                return None
+
+    async def release_inventory_reservation(self, *, order_id: str) -> None:
+        async with self._lock:
+            if self._disabled_reason:
+                return
+            try:
+                await asyncio.to_thread(self._release_inventory_reservation_sync, order_id)
             except GoogleSheetsUnavailableError as exc:
                 self._disable(str(exc))
 
@@ -112,10 +176,6 @@ class SheetsStore:
         rows = await self._build_sales_rows()
         await asyncio.to_thread(self._replace_worksheet_rows_sync, self._settings.google_sales_worksheet, SALES_HEADERS, rows)
 
-    async def _sync_inventory_locked(self) -> None:
-        snapshot = await self._build_inventory_snapshot()
-        await asyncio.to_thread(self._sync_inventory_sync, snapshot)
-
     def _ensure_schema_sync(self) -> None:
         self._ensure_worksheet_headers_sync(self._sales_ws(), SALES_HEADERS)
         self._ensure_worksheet_headers_sync(self._inventory_ws(), INVENTORY_HEADERS)
@@ -130,112 +190,10 @@ class SheetsStore:
             orders = list(result)
         return [self._serialize_sale(order) for order in orders]
 
-    async def _build_inventory_snapshot(self) -> list[SheetRow]:
-        now = datetime.now(timezone.utc)
-
-        async with get_session() as session:
-            products = list(await list_active_products(session))
-            stock_items = list(await session.scalars(select(StockAccount).order_by(StockAccount.id.asc())))
-            order_ids = {
-                order_id
-                for item in stock_items
-                for order_id in (item.reserved_for_order_id, item.delivered_for_order_id)
-                if order_id
-            }
-            orders: list[Order] = []
-            if order_ids:
-                orders = list(await session.scalars(select(Order).where(Order.id.in_(order_ids))))
-
-        orders_by_id = {order.id: order for order in orders}
-        rows_by_key: dict[str, SheetRow] = {}
-
-        for product in products:
-            rows_by_key[f"seed:{product.slug}:1"] = SheetRow(
-                values={
-                    "inventory_key": f"seed:{product.slug}:1",
-                    "product_key": product.slug,
-                    "product_title": product.title,
-                    "delivery_mode": "auto" if get_product_category(product.slug) == "chatgpt" else "manual",
-                    "source": "seed_catalog",
-                    "status": "available",
-                    "order_id": "",
-                    "reserved_until": "",
-                    "sold_at": "",
-                    "access_login": "",
-                    "access_secret": "",
-                    "note": "Seed row for available catalog item",
-                    "updated_at": _dt(now),
-                }
-            )
-
-        for item in stock_items:
-            related_order = orders_by_id.get(item.delivered_for_order_id or item.reserved_for_order_id or "")
-            if item.delivered_at is not None:
-                status = "sold"
-            elif item.reserved_until is not None and item.reserved_until > now:
-                status = "reserved"
-            elif item.is_active:
-                status = "available"
-            else:
-                status = "inactive"
-
-            product_key = related_order.product_slug if related_order is not None else item.pool
-            product_title = related_order.product_title if related_order is not None else "ChatGPT stock"
-            rows_by_key[item.item_id] = SheetRow(
-                values={
-                    "inventory_key": item.item_id,
-                    "product_key": product_key,
-                    "product_title": product_title,
-                    "delivery_mode": "auto" if item.pool == "chatgpt" else "manual",
-                    "source": "db_stock",
-                    "status": status,
-                    "order_id": related_order.id if related_order is not None else "",
-                    "reserved_until": _dt(item.reserved_until),
-                    "sold_at": _dt(item.delivered_at),
-                    "access_login": item.access_login,
-                    "access_secret": item.access_secret,
-                    "note": item.note or "",
-                    "updated_at": _dt(now),
-                }
-            )
-
-        return list(rows_by_key.values())
-
     def _replace_worksheet_rows_sync(self, worksheet_name: str, headers: list[str], rows: list[SheetRow]) -> None:
         ws = self._worksheet(worksheet_name)
         data = [headers]
         data.extend([[row.values.get(header, "") for header in headers] for row in rows])
-        ws.clear()
-        ws.update("A1", data, value_input_option="USER_ENTERED")
-
-    def _sync_inventory_sync(self, snapshot_rows: list[SheetRow]) -> None:
-        ws = self._inventory_ws()
-        self._ensure_worksheet_headers_sync(ws, INVENTORY_HEADERS)
-        values = ws.get_all_values()
-        existing_rows = _normalized_rows(values, INVENTORY_HEADERS)
-        by_key = {row.get("inventory_key", ""): row for row in existing_rows[1:] if row.get("inventory_key")}
-
-        for snapshot in snapshot_rows:
-            key = snapshot.values["inventory_key"]
-            existing = by_key.get(key)
-            if existing is None:
-                by_key[key] = {header: snapshot.values.get(header, "") for header in INVENTORY_HEADERS}
-                continue
-
-            for header in INVENTORY_HEADERS:
-                new_value = snapshot.values.get(header, "")
-                if header in {"access_login", "access_secret", "note"} and snapshot.values.get("source") == "seed_catalog":
-                    if existing.get(header):
-                        continue
-                existing[header] = new_value
-
-        merged_rows = [existing_rows[0] if existing_rows else {header: header for header in INVENTORY_HEADERS}]
-        manual_rows = [row for row in existing_rows[1:] if row.get("inventory_key", "") not in by_key]
-        merged_rows.extend(manual_rows)
-        merged_rows.extend(sorted(by_key.values(), key=lambda row: row.get("inventory_key", "")))
-
-        data = [INVENTORY_HEADERS]
-        data.extend([[row.get(header, "") for header in INVENTORY_HEADERS] for row in merged_rows[1:]])
         ws.clear()
         ws.update("A1", data, value_input_option="USER_ENTERED")
 
@@ -253,6 +211,202 @@ class SheetsStore:
 
     def _inventory_ws(self):
         return self._worksheet(self._settings.google_inventory_worksheet)
+
+    def _read_inventory_rows_sync(self) -> list[dict[str, str]]:
+        ws = self._inventory_ws()
+        self._ensure_worksheet_headers_sync(ws, INVENTORY_HEADERS)
+        values = ws.get_all_values()
+        normalized = _normalized_rows(values, INVENTORY_HEADERS)
+        if not normalized:
+            return []
+        return normalized[1:]
+
+    def _write_inventory_rows_sync(self, rows: list[dict[str, str]]) -> None:
+        ws = self._inventory_ws()
+        data = [INVENTORY_HEADERS]
+        data.extend([[row.get(header, "") for header in INVENTORY_HEADERS] for row in rows])
+        ws.clear()
+        ws.update("A1", data, value_input_option="USER_ENTERED")
+
+    def _seed_inventory_sync(self) -> None:
+        rows = self._read_inventory_rows_sync()
+        now = datetime.now(timezone.utc)
+        by_key = {row.get("inventory_key", ""): row for row in rows if row.get("inventory_key")}
+        changed = False
+        for inventory_key, product_key, login, secret, note in (
+            (
+                "test-gpt-plus-001",
+                "gpt-plus-1m",
+                "test-plus@example.com",
+                "plus-password-001",
+                "Тестовая выдача ChatGPT Plus. Замени эти данные на реальные аккаунты.",
+            ),
+            (
+                "test-gpt-pro-001",
+                "gpt-pro-1m",
+                "test-pro@example.com",
+                "pro-password-001",
+                "Тестовая выдача ChatGPT Pro. VPN в подарок, напиши в поддержку для получения.",
+            ),
+        ):
+            if inventory_key in by_key:
+                continue
+            spec = get_product_spec(product_key)
+            rows.append(
+                {
+                    "inventory_key": inventory_key,
+                    "product_key": product_key,
+                    "product_title": spec.title if spec is not None else product_key,
+                    "delivery_mode": "auto",
+                    "source": "manual_inventory",
+                    "status": "available",
+                    "order_id": "",
+                    "reserved_until": "",
+                    "sold_at": "",
+                    "access_login": login,
+                    "access_secret": secret,
+                    "note": note,
+                    "updated_at": _dt(now),
+                }
+            )
+            changed = True
+
+        if changed:
+            self._write_inventory_rows_sync(rows)
+
+    def _cleanup_expired_inventory_rows(self, rows: list[dict[str, str]]) -> tuple[list[dict[str, str]], list[str], bool]:
+        now = datetime.now(timezone.utc)
+        expired_order_ids: list[str] = []
+        changed = False
+
+        for row in rows:
+            status = (row.get("status") or "").strip().lower()
+            reserved_until = _parse_dt(row.get("reserved_until", ""))
+            if status != "reserved" or reserved_until is None or reserved_until >= now:
+                continue
+            if row.get("order_id"):
+                expired_order_ids.append(row["order_id"])
+            row["status"] = "available"
+            row["order_id"] = ""
+            row["reserved_until"] = ""
+            row["updated_at"] = _dt(now)
+            changed = True
+
+        return rows, expired_order_ids, changed
+
+    def _cleanup_expired_inventory_reservations_sync(self) -> list[str]:
+        rows = self._read_inventory_rows_sync()
+        rows, expired_order_ids, changed = self._cleanup_expired_inventory_rows(rows)
+        if changed:
+            self._write_inventory_rows_sync(rows)
+        return list(dict.fromkeys(expired_order_ids))
+
+    def _reserve_inventory_item_sync(
+        self,
+        order_id: str,
+        product_key: str,
+        product_title: str,
+        reserve_minutes: int,
+    ) -> dict[str, str] | None:
+        rows = self._read_inventory_rows_sync()
+        rows, _, changed = self._cleanup_expired_inventory_rows(rows)
+        now = datetime.now(timezone.utc)
+
+        for row in rows:
+            if row.get("order_id") == order_id and (row.get("status") or "").strip().lower() == "reserved":
+                if changed:
+                    self._write_inventory_rows_sync(rows)
+                return dict(row)
+
+        reserve_until = now + timedelta(minutes=reserve_minutes)
+        target = None
+        for row in rows:
+            if (row.get("product_key") or "").strip() != product_key:
+                continue
+            if (row.get("status") or "").strip().lower() != "available":
+                continue
+            if not (row.get("access_login") or "").strip() or not (row.get("access_secret") or "").strip():
+                continue
+            target = row
+            break
+
+        if target is None:
+            if changed:
+                self._write_inventory_rows_sync(rows)
+            return None
+
+        target["product_title"] = target.get("product_title") or product_title
+        target["delivery_mode"] = target.get("delivery_mode") or "auto"
+        target["source"] = target.get("source") or "manual_inventory"
+        target["status"] = "reserved"
+        target["order_id"] = order_id
+        target["reserved_until"] = _dt(reserve_until)
+        target["updated_at"] = _dt(now)
+        self._write_inventory_rows_sync(rows)
+        return dict(target)
+
+    def _claim_inventory_item_sync(
+        self,
+        order_id: str,
+        product_key: str,
+        product_title: str,
+        reserve_minutes: int,
+    ) -> dict[str, str] | None:
+        rows = self._read_inventory_rows_sync()
+        rows, _, _ = self._cleanup_expired_inventory_rows(rows)
+        now = datetime.now(timezone.utc)
+
+        target = None
+        for row in rows:
+            if row.get("order_id") != order_id:
+                continue
+            if (row.get("status") or "").strip().lower() in {"reserved", "sold"}:
+                target = row
+                break
+
+        if target is None:
+            target = self._reserve_inventory_item_sync(order_id, product_key, product_title, reserve_minutes)
+            if target is None:
+                return None
+            rows = self._read_inventory_rows_sync()
+            for row in rows:
+                if row.get("inventory_key") == target.get("inventory_key"):
+                    target = row
+                    break
+
+        if target is None:
+            return None
+
+        if (target.get("status") or "").strip().lower() == "sold":
+            return dict(target)
+
+        target["product_title"] = target.get("product_title") or product_title
+        target["delivery_mode"] = target.get("delivery_mode") or "auto"
+        target["source"] = target.get("source") or "manual_inventory"
+        target["status"] = "sold"
+        target["order_id"] = order_id
+        target["reserved_until"] = ""
+        target["sold_at"] = _dt(now)
+        target["updated_at"] = _dt(now)
+        self._write_inventory_rows_sync(rows)
+        return dict(target)
+
+    def _release_inventory_reservation_sync(self, order_id: str) -> None:
+        rows = self._read_inventory_rows_sync()
+        now = datetime.now(timezone.utc)
+        changed = False
+        for row in rows:
+            if row.get("order_id") != order_id:
+                continue
+            if (row.get("status") or "").strip().lower() != "reserved":
+                continue
+            row["status"] = "available"
+            row["order_id"] = ""
+            row["reserved_until"] = ""
+            row["updated_at"] = _dt(now)
+            changed = True
+        if changed:
+            self._write_inventory_rows_sync(rows)
 
     def _worksheet(self, name: str):
         if self._disabled_reason:
@@ -404,3 +558,16 @@ def _dt(value: datetime | None) -> str:
     if value.tzinfo is None:
         value = value.replace(tzinfo=timezone.utc)
     return value.astimezone(timezone.utc).isoformat()
+
+
+def _parse_dt(raw: str) -> datetime | None:
+    value = (raw or "").strip()
+    if not value:
+        return None
+    try:
+        parsed = datetime.fromisoformat(value.replace("Z", "+00:00"))
+    except ValueError:
+        return None
+    if parsed.tzinfo is None:
+        parsed = parsed.replace(tzinfo=timezone.utc)
+    return parsed.astimezone(timezone.utc)

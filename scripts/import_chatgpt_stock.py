@@ -5,19 +5,14 @@ import asyncio
 
 from dotenv import load_dotenv
 
-from saleacc_bot.config import get_settings
-from saleacc_bot.db import get_session, init_db
-from saleacc_bot.services.stock import sync_chatgpt_stock
+from saleacc_bot.db import init_db
 
 load_dotenv()
 
 
 async def main() -> None:
-    settings = get_settings()
     await init_db()
-    async with get_session() as session:
-        imported = await sync_chatgpt_stock(session, settings)
-    print(f"ChatGPT stock synced: {imported} items")
+    print("ChatGPT stock import from CSV is deprecated. Fill Google Sheets inventory manually.")
 
 
 if __name__ == "__main__":

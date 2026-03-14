@@ -5,8 +5,9 @@ from aiogram.exceptions import TelegramBadRequest, TelegramForbiddenError
 from aiogram.types import FSInputFile
 
 from saleacc_bot.config import Settings
-from saleacc_bot.models import Order, StockAccount
-from saleacc_bot.services.stock import order_needs_auto_delivery
+from saleacc_bot.keyboards import support_keyboard
+from saleacc_bot.models import Order
+from saleacc_bot.services.stock import DeliveryAccount, order_needs_auto_delivery
 from saleacc_bot.ui import format_price, main_menu_image_path, main_menu_payload
 
 
@@ -15,13 +16,15 @@ async def notify_order_paid(
     settings: Settings,
     order: Order,
     *,
-    stock_account: StockAccount | None = None,
+    stock_account: DeliveryAccount | None = None,
 ) -> None:
     try:
         user_text = _build_user_paid_text(order, stock_account=stock_account)
+        support_markup = support_keyboard(settings.support_url) if not order_needs_auto_delivery(order) else None
         await bot.send_message(
             chat_id=order.tg_user_id,
             text=user_text,
+            reply_markup=support_markup,
             parse_mode="HTML",
         )
         main_text, main_keyboard = main_menu_payload(settings, order.tg_user_id)
@@ -68,7 +71,7 @@ async def notify_order_paid(
             continue
 
 
-def _build_user_paid_text(order: Order, *, stock_account: StockAccount | None) -> str:
+def _build_user_paid_text(order: Order, *, stock_account: DeliveryAccount | None) -> str:
     if order_needs_auto_delivery(order) and stock_account is not None:
         note_line = f"\nПримечание: <code>{stock_account.note}</code>" if stock_account.note else ""
         return (
@@ -96,5 +99,6 @@ def _build_user_paid_text(order: Order, *, stock_account: StockAccount | None) -
         f"Сумма: <code>{format_price(order.total_price)}</code>\n"
         f"E-mail: <code>{order.customer_email}</code>\n\n"
         "Выдача аккаунта по этому тарифу выполняется вручную. "
-        "Доступ придет в этого бота в течение 1-24 часов."
+        "Доступ придет в этого бота в течение 1-24 часов.\n\n"
+        "Если нужен контакт с нами по заказу, кнопка поддержки ниже."
     )

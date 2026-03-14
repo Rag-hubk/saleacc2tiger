@@ -176,7 +176,7 @@ async def _start_checkout(*, chat_id: int, user_id: int, username: str | None, p
                 failed_order = await get_order(session, order.id)
                 if failed_order is not None:
                     await get_sheets_store().upsert_order(failed_order)
-                return False, "Автовыдача GPT сейчас недоступна. Проверь настройку CSV-источника стока."
+                return False, f"Автовыдача GPT сейчас недоступна. {exc}"
             if reserved_account is None:
                 try:
                     await yookassa_client.cancel_payment(payment.payment_id)

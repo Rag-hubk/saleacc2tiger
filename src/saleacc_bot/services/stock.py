@@ -1,28 +1,26 @@
 from __future__ import annotations
 
-import csv
 from dataclasses import dataclass
-from datetime import datetime, timedelta, timezone
-from pathlib import Path
-from typing import Iterable
+from datetime import datetime, timezone
 
-import aiohttp
-from sqlalchemy import or_, select
+from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from saleacc_bot.config import Settings
-from saleacc_bot.models import Order, StockAccount
+from saleacc_bot.models import Order
 from saleacc_bot.services.catalog import get_product_category
+from saleacc_bot.services.sheets_store import get_sheets_store
 
 CHATGPT_STOCK_POOL = "chatgpt"
 
 
 @dataclass(frozen=True)
-class StockRow:
+class DeliveryAccount:
     item_id: str
     access_login: str
     access_secret: str
     note: str
+    reserved_until: datetime | None = None
 
 
 def order_needs_auto_delivery(order: Order) -> bool:
@@ -30,176 +28,84 @@ def order_needs_auto_delivery(order: Order) -> bool:
 
 
 async def sync_chatgpt_stock(session: AsyncSession, settings: Settings) -> int:
-    rows = await _load_chatgpt_stock_rows(settings)
-    seen: set[str] = set()
-
-    existing = await session.scalars(select(StockAccount).where(StockAccount.pool == CHATGPT_STOCK_POOL))
-    by_item_id = {item.item_id: item for item in existing}
-
-    for row in rows:
-        seen.add(row.item_id)
-        item = by_item_id.get(row.item_id)
-        if item is None:
-            session.add(
-                StockAccount(
-                    pool=CHATGPT_STOCK_POOL,
-                    item_id=row.item_id,
-                    access_login=row.access_login,
-                    access_secret=row.access_secret,
-                    note=row.note or None,
-                    is_active=True,
-                )
-            )
-            continue
-
-        item.access_login = row.access_login
-        item.access_secret = row.access_secret
-        item.note = row.note or None
-        item.is_active = True
-
-    for item in by_item_id.values():
-        if item.item_id not in seen:
-            item.is_active = False
-
-    await session.commit()
-    return len(seen)
+    raise RuntimeError("ChatGPT stock is managed from Google Sheets inventory. CSV import is no longer used.")
 
 
 async def cleanup_expired_reservations(session: AsyncSession) -> None:
-    now = datetime.now(timezone.utc)
-    expired_items = await session.scalars(
-        select(StockAccount).where(
-            StockAccount.pool == CHATGPT_STOCK_POOL,
-            StockAccount.delivered_at.is_(None),
-            StockAccount.reserved_until.is_not(None),
-            StockAccount.reserved_until < now,
-        )
-    )
-    expired_order_ids: list[str] = []
-    for item in expired_items:
-        if item.reserved_for_order_id:
-            expired_order_ids.append(item.reserved_for_order_id)
-        item.reserved_for_order_id = None
-        item.reserved_until = None
+    expired_order_ids = await get_sheets_store().cleanup_expired_inventory_reservations()
+    if not expired_order_ids:
+        return
 
-    if expired_order_ids:
-        orders = await session.scalars(select(Order).where(Order.id.in_(expired_order_ids), Order.delivered_at.is_(None)))
-        for order in orders:
-            order.assigned_stock_item_id = None
-            order.reserved_until = None
-
+    orders = await session.scalars(select(Order).where(Order.id.in_(expired_order_ids), Order.delivered_at.is_(None)))
+    for order in orders:
+        order.assigned_stock_item_id = None
+        order.reserved_until = None
     await session.commit()
 
 
-async def reserve_chatgpt_account(session: AsyncSession, settings: Settings, order: Order) -> StockAccount | None:
+async def reserve_chatgpt_account(session: AsyncSession, settings: Settings, order: Order) -> DeliveryAccount | None:
     await cleanup_expired_reservations(session)
-    await sync_chatgpt_stock(session, settings)
-
-    existing = await get_reserved_chatgpt_account_for_order(session, order.id)
-    if existing is not None:
-        return existing
-
-    now = datetime.now(timezone.utc)
-    reserve_until = now + timedelta(minutes=settings.chatgpt_stock_reserve_minutes)
-    item = await session.scalar(
-        select(StockAccount)
-        .where(
-            StockAccount.pool == CHATGPT_STOCK_POOL,
-            StockAccount.is_active.is_(True),
-            StockAccount.delivered_at.is_(None),
-            or_(StockAccount.reserved_until.is_(None), StockAccount.reserved_until < now),
-        )
-        .order_by(StockAccount.id.asc())
-        .limit(1)
+    row = await get_sheets_store().reserve_inventory_item(
+        order_id=order.id,
+        product_key=order.product_slug,
+        product_title=order.product_title,
+        reserve_minutes=settings.chatgpt_stock_reserve_minutes,
     )
-    if item is None:
+    if row is None:
         return None
 
-    item.reserved_for_order_id = order.id
-    item.reserved_until = reserve_until
-    order.assigned_stock_item_id = item.item_id
-    order.reserved_until = reserve_until
+    reserved_until = _parse_dt(row.get("reserved_until", ""))
+    order.assigned_stock_item_id = row.get("inventory_key") or None
+    order.reserved_until = reserved_until
     await session.commit()
-    await session.refresh(item)
-    return item
-
-
-async def get_reserved_chatgpt_account_for_order(session: AsyncSession, order_id: str) -> StockAccount | None:
-    return await session.scalar(
-        select(StockAccount).where(
-            StockAccount.pool == CHATGPT_STOCK_POOL,
-            StockAccount.reserved_for_order_id == order_id,
-            StockAccount.delivered_at.is_(None),
-        )
-    )
+    return _delivery_account_from_row(row)
 
 
 async def release_chatgpt_reservation(session: AsyncSession, order: Order) -> None:
-    item = await get_reserved_chatgpt_account_for_order(session, order.id)
-    if item is not None:
-        item.reserved_for_order_id = None
-        item.reserved_until = None
+    await get_sheets_store().release_inventory_reservation(order_id=order.id)
     if order.delivered_at is None:
         order.assigned_stock_item_id = None
     order.reserved_until = None
     await session.commit()
 
 
-async def claim_chatgpt_account(session: AsyncSession, settings: Settings, order: Order) -> StockAccount | None:
+async def claim_chatgpt_account(session: AsyncSession, settings: Settings, order: Order) -> DeliveryAccount | None:
     await cleanup_expired_reservations(session)
-    item = await get_reserved_chatgpt_account_for_order(session, order.id)
-    if item is None:
-        item = await reserve_chatgpt_account(session, settings, order)
-        if item is None:
-            return None
+    row = await get_sheets_store().claim_inventory_item(
+        order_id=order.id,
+        product_key=order.product_slug,
+        product_title=order.product_title,
+        reserve_minutes=settings.chatgpt_stock_reserve_minutes,
+    )
+    if row is None:
+        return None
 
     now = datetime.now(timezone.utc)
-    item.reserved_for_order_id = None
-    item.reserved_until = None
-    item.delivered_for_order_id = order.id
-    item.delivered_at = now
-    order.assigned_stock_item_id = item.item_id
+    order.assigned_stock_item_id = row.get("inventory_key") or None
     order.reserved_until = None
     order.delivered_at = now
     await session.commit()
-    await session.refresh(item)
-    return item
+    return _delivery_account_from_row(row)
 
 
-async def _load_chatgpt_stock_rows(settings: Settings) -> list[StockRow]:
-    if settings.chatgpt_stock_csv_url:
-        raw_csv = await _load_csv_from_url(settings.chatgpt_stock_csv_url)
-        return list(_parse_stock_rows(raw_csv))
-    if settings.chatgpt_stock_csv_path:
-        raw_csv = Path(settings.chatgpt_stock_csv_path).read_text(encoding="utf-8")
-        return list(_parse_stock_rows(raw_csv))
-    raise RuntimeError("ChatGPT stock source is not configured. Set CHATGPT_STOCK_CSV_URL or CHATGPT_STOCK_CSV_PATH.")
+def _delivery_account_from_row(row: dict[str, str]) -> DeliveryAccount:
+    return DeliveryAccount(
+        item_id=(row.get("inventory_key") or "").strip(),
+        access_login=(row.get("access_login") or "").strip(),
+        access_secret=(row.get("access_secret") or "").strip(),
+        note=(row.get("note") or "").strip(),
+        reserved_until=_parse_dt(row.get("reserved_until", "")),
+    )
 
 
-async def _load_csv_from_url(url: str) -> str:
-    async with aiohttp.ClientSession() as session:
-        async with session.get(url, timeout=20) as response:
-            if response.status >= 400:
-                raise RuntimeError(f"Failed to load stock CSV: HTTP {response.status}")
-            return await response.text(encoding="utf-8")
-
-
-def _parse_stock_rows(raw_csv: str) -> Iterable[StockRow]:
-    reader = csv.DictReader(raw_csv.splitlines())
-    required_fields = {"item_id", "access_login", "access_secret"}
-    if reader.fieldnames is None or not required_fields.issubset(set(reader.fieldnames)):
-        raise RuntimeError("ChatGPT stock CSV must contain item_id, access_login, access_secret columns.")
-
-    for row in reader:
-        item_id = str(row.get("item_id") or "").strip()
-        access_login = str(row.get("access_login") or "").strip()
-        access_secret = str(row.get("access_secret") or "").strip()
-        note = str(row.get("note") or "").strip()
-        if not item_id or not access_login or not access_secret:
-            continue
-        yield StockRow(
-            item_id=item_id,
-            access_login=access_login,
-            access_secret=access_secret,
-            note=note,
-        )
+def _parse_dt(raw: str) -> datetime | None:
+    value = (raw or "").strip()
+    if not value:
+        return None
+    try:
+        parsed = datetime.fromisoformat(value.replace("Z", "+00:00"))
+    except ValueError:
+        return None
+    if parsed.tzinfo is None:
+        parsed = parsed.replace(tzinfo=timezone.utc)
+    return parsed.astimezone(timezone.utc)

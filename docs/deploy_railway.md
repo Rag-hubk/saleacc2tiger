@@ -42,7 +42,6 @@ DATABASE_URL=${{Postgres.DATABASE_URL}}
 - `GOOGLE_SALES_WORKSHEET`
 - `GOOGLE_ORDERS_WORKSHEET`
 - `GOOGLE_SERVICE_ACCOUNT_JSON_B64` или `GOOGLE_SERVICE_ACCOUNT_JSON`
-- `CHATGPT_STOCK_CSV_URL`
 - `CHATGPT_STOCK_RESERVE_MINUTES`
 - `YOOKASSA_SHOP_ID`
 - `YOOKASSA_SECRET_KEY`
@@ -67,7 +66,10 @@ DATABASE_URL=${{Postgres.DATABASE_URL}}
 
 Важно для GPT-стока:
 
-- `CHATGPT_STOCK_CSV_URL` должен вести на CSV с колонками `item_id,access_login,access_secret,note`
+- лист `inventory` в Google Sheets является основным складом GPT-аккаунтов
+- свободные строки должны иметь `status=available`
+- для выдачи обязательны `product_key`, `access_login`, `access_secret`
+- `note` отправляется пользователю вместе с логином и паролем после успешной оплаты
 - резерв GPT-аккаунта держится `20 минут` с момента выдачи ссылки на оплату
 - для `Gemini` автовыдача не используется, после оплаты бот сообщает срок `1–24 часа`
 

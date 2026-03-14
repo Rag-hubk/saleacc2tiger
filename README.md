@@ -12,7 +12,7 @@ Telegram-бот витрины `NH | STORE01` для продажи:
 - карточки тарифов с актуальными ценами, официальной ценой и экономией
 - оформление заказа через `ЮKassa`
 - `ChatGPT`: резерв аккаунта на `20 минут` после выдачи ссылки на оплату
-- `ChatGPT`: автовыдача из CSV-стока после успешной оплаты
+- `ChatGPT`: автовыдача из листа `inventory` в Google Sheets после успешной оплаты
 - `Gemini`: без автовыдачи, выдача вручную в течение `1–24 часов`
 - сохранение заказов в БД
 - синхронизация заказов в Google Sheets
@@ -53,8 +53,6 @@ Telegram-бот витрины `NH | STORE01` для продажи:
 - `GOOGLE_INVENTORY_WORKSHEET` default `inventory`
 - `GOOGLE_SALES_WORKSHEET` default `sales`
 - `GOOGLE_ORDERS_WORKSHEET` legacy fallback for old deployments
-- `CHATGPT_STOCK_CSV_URL` direct URL to CSV export
-- `CHATGPT_STOCK_CSV_PATH` local CSV path for stock import
 - `CHATGPT_STOCK_RESERVE_MINUTES` default `20`
 - `YOOKASSA_API_BASE` default `https://api.yookassa.ru/v3`
 - `YOOKASSA_VAT_CODE` default `1`
@@ -64,22 +62,6 @@ Telegram-бот витрины `NH | STORE01` для продажи:
 
 - `SUPPORT_URL` должен быть полным `https://...` URL или `@username`
 - `PUBLIC_OFFER_URL` должен быть полным `https://...` URL
-
-## CSV stock
-
-Для автовыдачи `ChatGPT` бот ожидает CSV с колонками:
-
-```text
-item_id,access_login,access_secret,note
-```
-
-Импорт вручную:
-
-```bash
-PYTHONPATH=src python3 scripts/import_chatgpt_stock.py
-```
-
-Если `CHATGPT_STOCK_CSV_URL` или `CHATGPT_STOCK_CSV_PATH` настроен, бот подтягивает актуальный GPT-сток перед резервом.
 
 ## Google Sheets
 
@@ -99,7 +81,19 @@ PYTHONPATH=src python3 scripts/init_google_sheet.py
 - `inventory` — инвентарь и статусы `available / reserved / sold`
 - `sales` — только оплаченные продажи
 
-Если лист `inventory` пустой, бот добавляет по одной seed-строке на каждый активный продукт из каталога.
+`inventory` — это основной склад для `ChatGPT`.
+Именно из него бот берет аккаунты на резерв и выдачу.
+
+Минимально важные поля строки `inventory`:
+
+- `inventory_key`
+- `product_key`
+- `status`
+- `access_login`
+- `access_secret`
+- `note`
+
+Если лист `inventory` пустой, бот добавляет тестовые строки для `ChatGPT Plus` и `ChatGPT Pro`, чтобы было понятно, как заполнять склад вручную.
 
 Если в логах есть `APIError: [403]: Google Sheets API has not been used in project ... or it is disabled`, значит credentials валидны, но `Google Sheets API` выключен в GCP.
 
