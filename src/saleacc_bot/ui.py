@@ -4,8 +4,7 @@ from pathlib import Path
 
 from aiogram.types import InlineKeyboardMarkup
 
-from saleacc_bot.config import Settings
-from saleacc_bot.keyboards import main_menu_keyboard
+from saleacc_bot.keyboards import store_menu_keyboard
 from saleacc_bot.models import Order, Product
 from saleacc_bot.services.catalog import get_product_category, get_product_spec
 from saleacc_bot.url_utils import is_valid_http_url
@@ -21,6 +20,13 @@ MAIN_MENU_TEXT = (
     "🛡️ Гарантия 100% — если что-то не так, бесплатная замена\n"
     "🎁 VPN в подарок — настроим, чтобы всё работало\n"
     "💳 Оплата — карты РФ, СБП\n\n"
+    "📌 <b>Открыть каталог можно кнопкой</b> <code>🛍 Магазин</code> <b>снизу.</b>"
+)
+
+STORE_MENU_TEXT = (
+    "👋 <b>NH | STORE01</b>\n\n"
+    "<blockquote>Мы продаём подписки на ChatGPT и Google Gemini в 2-3 раза дешевле, чем напрямую. "
+    "Оплата в рублях, без иностранных карт, без танцев с VPN при покупке.</blockquote>\n\n"
     "📌 <b>Выбери раздел:</b>\n"
     "🟢 ChatGPT — Plus / Pro\n"
     "🔵 Gemini — Ultra"
@@ -55,14 +61,12 @@ SECTION_IMAGES = {
     "chatgpt": _IMAGE_DIR / "Раздел ChatGPT.jpeg",
     "gemini": _IMAGE_DIR / "Раздел Gemini.jpeg",
 }
+def main_menu_text() -> str:
+    return MAIN_MENU_TEXT
 
 
-def is_admin(settings: Settings, user_id: int) -> bool:
-    return user_id in settings.admin_ids
-
-
-def main_menu_payload(settings: Settings, user_id: int) -> tuple[str, InlineKeyboardMarkup]:
-    return MAIN_MENU_TEXT, main_menu_keyboard(is_admin=is_admin(settings, user_id))
+def store_menu_payload() -> tuple[str, InlineKeyboardMarkup]:
+    return STORE_MENU_TEXT, store_menu_keyboard()
 
 
 def main_menu_image_path() -> Path:

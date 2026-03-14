@@ -13,13 +13,13 @@ def _button(text: str, *, callback_data: str | None = None, url: str | None = No
     return InlineKeyboardButton(text=text, url=url)
 
 
-def main_menu_keyboard(*, is_admin: bool) -> InlineKeyboardMarkup:
-    rows = [
-        [_button("🟢 ChatGPT", callback_data="section:chatgpt"), _button("🔵 Gemini", callback_data="section:gemini")],
-    ]
-    if is_admin:
-        rows.append([_button("Админ", callback_data="admin_panel")])
-    return InlineKeyboardMarkup(inline_keyboard=rows)
+def store_menu_keyboard() -> InlineKeyboardMarkup:
+    return InlineKeyboardMarkup(
+        inline_keyboard=[
+            [_button("🟢 ChatGPT", callback_data="section:chatgpt"), _button("🔵 Gemini", callback_data="section:gemini")],
+            [_button("В главное меню", callback_data="main")],
+        ]
+    )
 
 
 def user_reply_keyboard() -> ReplyKeyboardMarkup:

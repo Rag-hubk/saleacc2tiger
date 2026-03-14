@@ -40,13 +40,14 @@ from saleacc_bot.services.users import get_user, set_user_email, touch_user
 from saleacc_bot.services.yookassa import YooKassaClient
 from saleacc_bot.states import CheckoutStates
 from saleacc_bot.ui import (
-    main_menu_payload,
+    main_menu_text,
     main_menu_image_path,
     orders_text,
     payment_caption,
     product_text,
     section_image_path,
     section_text,
+    store_menu_payload,
 )
 
 router = Router(name="user")
@@ -95,14 +96,30 @@ async def _replace_message(callback: CallbackQuery, text: str, reply_markup=None
 
 
 async def _render_main(callback: CallbackQuery) -> None:
-    text, keyboard = main_menu_payload(settings, callback.from_user.id)
-    await _replace_message(callback, text, keyboard, photo_path=main_menu_image_path())
+    await _replace_message(
+        callback,
+        main_menu_text(),
+        user_reply_keyboard(),
+        photo_path=main_menu_image_path(),
+    )
 
 
 async def _show_main_menu_for_message(message: Message, state: FSMContext | None = None) -> None:
     if state is not None:
         await state.clear()
-    text, keyboard = main_menu_payload(settings, message.from_user.id)
+    await _send_content(
+        bot=message.bot,
+        chat_id=message.chat.id,
+        text=main_menu_text(),
+        reply_markup=user_reply_keyboard(),
+        photo_path=main_menu_image_path(),
+    )
+
+
+async def _show_store_menu_for_message(message: Message, state: FSMContext | None = None) -> None:
+    if state is not None:
+        await state.clear()
+    text, keyboard = store_menu_payload()
     await _send_content(
         bot=message.bot,
         chat_id=message.chat.id,
@@ -110,6 +127,11 @@ async def _show_main_menu_for_message(message: Message, state: FSMContext | None
         reply_markup=keyboard,
         photo_path=main_menu_image_path(),
     )
+
+
+async def _render_store_menu(callback: CallbackQuery) -> None:
+    text, keyboard = store_menu_payload()
+    await _replace_message(callback, text, keyboard, photo_path=main_menu_image_path())
 
 
 async def _start_checkout(*, chat_id: int, user_id: int, username: str | None, product_slug: str, email: str, bot) -> tuple[bool, str]:
@@ -269,15 +291,12 @@ async def on_start(message: Message, state: FSMContext) -> None:
             first_name=message.from_user.first_name,
             last_name=message.from_user.last_name,
         )
-    nav_message = await message.answer("\u2060", reply_markup=user_reply_keyboard())
-    with suppress(TelegramBadRequest):
-        await nav_message.delete()
     await _show_main_menu_for_message(message)
 
 
 @router.message(F.text == "🛍 Магазин")
 async def on_store_message(message: Message, state: FSMContext) -> None:
-    await _show_main_menu_for_message(message, state)
+    await _show_store_menu_for_message(message, state)
 
 
 @router.message(F.text == "📲Помощь")
@@ -301,7 +320,7 @@ async def on_main(callback: CallbackQuery, state: FSMContext) -> None:
 
 @router.callback_query(F.data == "catalog")
 async def on_catalog(callback: CallbackQuery) -> None:
-    await _render_main(callback)
+    await _render_store_menu(callback)
     await callback.answer()
 
 
