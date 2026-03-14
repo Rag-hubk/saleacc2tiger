@@ -3,13 +3,14 @@ from __future__ import annotations
 import asyncio
 import base64
 import json
+import logging
 from dataclasses import dataclass
 from datetime import datetime, timezone
 from functools import lru_cache
 
 import gspread
 from google.oauth2.service_account import Credentials
-from gspread.exceptions import WorksheetNotFound
+from gspread.exceptions import APIError, SpreadsheetNotFound, WorksheetNotFound
 
 from saleacc_bot.config import Settings, get_settings
 from saleacc_bot.models import Order
@@ -42,10 +43,16 @@ _SCOPES = (
     "https://www.googleapis.com/auth/drive",
 )
 
+logger = logging.getLogger(__name__)
+
 
 @dataclass(frozen=True)
 class SheetOrderRow:
     values: dict[str, str]
+
+
+class GoogleSheetsUnavailableError(RuntimeError):
+    pass
 
 
 class SheetsStore:
@@ -53,18 +60,38 @@ class SheetsStore:
         self._settings = settings
         self._lock = asyncio.Lock()
         self._gc: gspread.Client | None = None
+        self._service_account_email: str | None = None
+        self._disabled_reason: str | None = None
 
-    async def ensure_schema(self) -> None:
+    async def ensure_schema(self) -> bool:
         async with self._lock:
-            await asyncio.to_thread(self._ensure_schema_sync)
+            if self._disabled_reason:
+                return False
+            try:
+                await asyncio.to_thread(self._ensure_schema_sync)
+            except GoogleSheetsUnavailableError as exc:
+                self._disable(str(exc))
+                return False
+            return True
 
     async def upsert_order(self, order: Order) -> None:
         async with self._lock:
-            await asyncio.to_thread(self._upsert_order_sync, self._serialize_order(order))
+            if self._disabled_reason:
+                return
+            try:
+                await asyncio.to_thread(self._upsert_order_sync, self._serialize_order(order))
+            except GoogleSheetsUnavailableError as exc:
+                self._disable(str(exc))
 
     async def list_recent_orders(self, limit: int = 20) -> list[dict[str, str]]:
         async with self._lock:
-            return await asyncio.to_thread(self._list_recent_orders_sync, limit)
+            if self._disabled_reason:
+                return []
+            try:
+                return await asyncio.to_thread(self._list_recent_orders_sync, limit)
+            except GoogleSheetsUnavailableError as exc:
+                self._disable(str(exc))
+                return []
 
     def _ensure_schema_sync(self) -> None:
         ws = self._orders_ws()
@@ -118,7 +145,12 @@ class SheetsStore:
         return rows[:limit]
 
     def _orders_ws(self):
-        spreadsheet = self._client().open_by_key(self._settings.google_sheet_id)
+        if self._disabled_reason:
+            raise GoogleSheetsUnavailableError(self._disabled_reason)
+        try:
+            spreadsheet = self._client().open_by_key(self._settings.google_sheet_id)
+        except (APIError, PermissionError, SpreadsheetNotFound) as exc:
+            raise GoogleSheetsUnavailableError(_format_google_access_error(exc, self._settings, self._service_account_email)) from exc
         try:
             return spreadsheet.worksheet(self._settings.google_orders_worksheet)
         except WorksheetNotFound:
@@ -127,8 +159,15 @@ class SheetsStore:
     def _client(self) -> gspread.Client:
         if self._gc is None:
             credentials = _build_google_credentials(self._settings)
+            self._service_account_email = getattr(credentials, "service_account_email", None)
             self._gc = gspread.authorize(credentials)
         return self._gc
+
+    def _disable(self, reason: str) -> None:
+        if self._disabled_reason == reason:
+            return
+        self._disabled_reason = reason
+        logger.warning("Google Sheets integration disabled: %s", reason)
 
     def _serialize_order(self, order: Order) -> SheetOrderRow:
         def _dt(value: datetime | None) -> str:
@@ -196,6 +235,40 @@ def _build_google_credentials(settings: Settings) -> Credentials:
         "Google service account is not configured. Set GOOGLE_SERVICE_ACCOUNT_FILE, "
         "GOOGLE_SERVICE_ACCOUNT_JSON or GOOGLE_SERVICE_ACCOUNT_JSON_B64."
     )
+
+
+def _format_google_access_error(
+    exc: Exception,
+    settings: Settings,
+    service_account_email: str | None,
+) -> str:
+    message = str(exc)
+    cause = getattr(exc, "__cause__", None)
+    if cause is not None:
+        message = f"{message} {cause}"
+    normalized = message.lower()
+
+    spreadsheet_hint = f"spreadsheet {settings.google_sheet_id}"
+    share_hint = ""
+    if service_account_email:
+        share_hint = f" and share {spreadsheet_hint} with {service_account_email}"
+
+    if "has not been used in project" in normalized or "it is disabled" in normalized:
+        return (
+            "Google Sheets API is disabled for the Google Cloud project of the service account. "
+            "Enable `Google Sheets API` in Google Cloud Console, wait a few minutes, then restart the service."
+        )
+    if isinstance(exc, SpreadsheetNotFound) or "spreadsheet not found" in normalized:
+        return (
+            f"Google spreadsheet {settings.google_sheet_id} was not found or is not accessible. "
+            f"Verify GOOGLE_SHEET_ID{share_hint}."
+        )
+    if isinstance(exc, PermissionError) or "permission" in normalized or "forbidden" in normalized or "403" in normalized:
+        return (
+            f"Google service account does not have access to {spreadsheet_hint}. "
+            f"Verify GOOGLE_SHEET_ID, enable Google Sheets API{share_hint}, then restart the service."
+        )
+    return f"Google Sheets request failed: {message}"
 
 
 def _col_to_a1(index: int) -> str:

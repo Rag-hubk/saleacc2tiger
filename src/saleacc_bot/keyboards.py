@@ -3,6 +3,7 @@ from __future__ import annotations
 from aiogram.types import InlineKeyboardButton, InlineKeyboardMarkup
 
 from saleacc_bot.models import Product
+from saleacc_bot.services.catalog import get_product_spec
 
 
 def _button(text: str, *, callback_data: str | None = None, url: str | None = None) -> InlineKeyboardButton:
@@ -13,7 +14,7 @@ def _button(text: str, *, callback_data: str | None = None, url: str | None = No
 
 def main_menu_keyboard(*, is_admin: bool, support_url: str) -> InlineKeyboardMarkup:
     rows = [
-        [_button("Тарифы", callback_data="catalog")],
+        [_button("🟢 ChatGPT", callback_data="section:chatgpt"), _button("🔵 Gemini", callback_data="section:gemini")],
         [_button("Мои заказы", callback_data="orders"), _button("Поддержка", url=support_url)],
     ]
     if is_admin:
@@ -21,35 +22,23 @@ def main_menu_keyboard(*, is_admin: bool, support_url: str) -> InlineKeyboardMar
     return InlineKeyboardMarkup(inline_keyboard=rows)
 
 
-def catalog_keyboard(products: list[Product]) -> InlineKeyboardMarkup:
-    plus_product = next((product for product in products if product.slug == "gpt-plus-1m"), None)
-    pro_products = [product for product in products if product.slug.startswith("gpt-pro-")]
-
+def section_keyboard(products: list[Product], *, back_callback: str = "main") -> InlineKeyboardMarkup:
     rows: list[list[InlineKeyboardButton]] = []
-    if plus_product is not None:
-        rows.append([_button("ChatGPT Plus · 1 месяц", callback_data=f"product:{plus_product.slug}")])
-    if pro_products:
-        rows.append([_button("ChatGPT Pro · выбрать срок", callback_data="group:pro")])
-    rows.append([_button("Назад", callback_data="main")])
+    for product in products:
+        spec = get_product_spec(product.slug)
+        label = spec.button_title if spec is not None else product.title
+        rows.append([_button(label, callback_data=f"product:{product.slug}")])
+    rows.append([_button("Назад", callback_data=back_callback)])
     return InlineKeyboardMarkup(inline_keyboard=rows)
 
 
-def product_keyboard(product_slug: str, *, back_callback: str = "catalog") -> InlineKeyboardMarkup:
+def product_keyboard(product_slug: str, *, back_callback: str) -> InlineKeyboardMarkup:
     return InlineKeyboardMarkup(
         inline_keyboard=[
             [_button("Оформить заказ", callback_data=f"buy:{product_slug}")],
             [_button("Назад", callback_data=back_callback)],
         ]
     )
-
-
-def pro_group_keyboard(products: list[Product]) -> InlineKeyboardMarkup:
-    rows = [
-        [_button(product.title, callback_data=f"product:{product.slug}")]
-        for product in sorted(products, key=lambda item: item.sort_order)
-    ]
-    rows.append([_button("Назад", callback_data="catalog")])
-    return InlineKeyboardMarkup(inline_keyboard=rows)
 
 
 def email_choice_keyboard(*, product_slug: str, email: str) -> InlineKeyboardMarkup:
@@ -87,8 +76,4 @@ def admin_panel_keyboard() -> InlineKeyboardMarkup:
 
 
 def admin_back_keyboard() -> InlineKeyboardMarkup:
-    return InlineKeyboardMarkup(
-        inline_keyboard=[
-            [_button("Назад", callback_data="admin_panel")],
-        ]
-    )
+    return InlineKeyboardMarkup(inline_keyboard=[[_button("Назад", callback_data="admin_panel")]])

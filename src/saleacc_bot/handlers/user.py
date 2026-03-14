@@ -11,14 +11,13 @@ from aiogram.types import CallbackQuery, Message
 from saleacc_bot.config import get_settings
 from saleacc_bot.db import get_session
 from saleacc_bot.keyboards import (
-    catalog_keyboard,
     email_choice_keyboard,
     orders_keyboard,
     pay_order_keyboard,
-    pro_group_keyboard,
     product_keyboard,
+    section_keyboard,
 )
-from saleacc_bot.services.catalog import get_product_by_slug, list_active_products
+from saleacc_bot.services.catalog import get_product_by_slug, get_product_category, list_active_products
 from saleacc_bot.services.notifications import notify_order_paid
 from saleacc_bot.services.orders import (
     ORDER_STATUS_CANCELLED,
@@ -36,12 +35,11 @@ from saleacc_bot.services.users import get_user, set_user_email, touch_user
 from saleacc_bot.services.yookassa import YooKassaClient
 from saleacc_bot.states import CheckoutStates
 from saleacc_bot.ui import (
-    catalog_text,
     main_menu_payload,
     orders_text,
     payment_caption,
-    pro_group_text,
     product_text,
+    section_text,
 )
 
 router = Router(name="user")
@@ -194,9 +192,22 @@ async def on_main(callback: CallbackQuery, state: FSMContext) -> None:
 
 @router.callback_query(F.data == "catalog")
 async def on_catalog(callback: CallbackQuery) -> None:
+    await _render_main(callback)
+    await callback.answer()
+
+
+@router.callback_query(F.data.startswith("section:"))
+async def on_section(callback: CallbackQuery) -> None:
+    category = callback.data.split(":", maxsplit=1)[1]
+    if category not in {"chatgpt", "gemini"}:
+        await callback.answer("Раздел недоступен.", show_alert=True)
+        return
     async with get_session() as session:
-        products = list(await list_active_products(session))
-    await _safe_edit(callback, catalog_text(products), catalog_keyboard(products))
+        products = [product for product in await list_active_products(session) if get_product_category(product.slug) == category]
+    if not products:
+        await callback.answer("Раздел временно недоступен.", show_alert=True)
+        return
+    await _safe_edit(callback, section_text(category), section_keyboard(products))
     await callback.answer()
 
 
@@ -216,7 +227,8 @@ async def on_product(callback: CallbackQuery) -> None:
     if product is None:
         await callback.answer("Тариф недоступен.", show_alert=True)
         return
-    back_callback = "group:pro" if product.slug.startswith("gpt-pro-") else "catalog"
+    category = get_product_category(product.slug) or "chatgpt"
+    back_callback = f"section:{category}"
     await _safe_edit(callback, product_text(product), product_keyboard(product.slug, back_callback=back_callback))
     await callback.answer()
 
@@ -224,12 +236,11 @@ async def on_product(callback: CallbackQuery) -> None:
 @router.callback_query(F.data == "group:pro")
 async def on_pro_group(callback: CallbackQuery) -> None:
     async with get_session() as session:
-        products = list(await list_active_products(session))
-    pro_products = [product for product in products if product.slug.startswith("gpt-pro-")]
-    if not pro_products:
+        products = [product for product in await list_active_products(session) if get_product_category(product.slug) == "chatgpt"]
+    if not products:
         await callback.answer("Раздел временно недоступен.", show_alert=True)
         return
-    await _safe_edit(callback, pro_group_text(pro_products), pro_group_keyboard(pro_products))
+    await _safe_edit(callback, section_text("chatgpt"), section_keyboard(products))
     await callback.answer()
 
 

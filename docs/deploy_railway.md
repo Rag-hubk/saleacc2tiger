@@ -51,6 +51,8 @@ DATABASE_URL=${{Postgres.DATABASE_URL}}
 - `GOOGLE_SERVICE_ACCOUNT_JSON_B64` должен содержать base64 от полного JSON-файла service account
 - это не `GOOGLE_SHEET_ID`, не числовой `project_id` и не отдельный ключ
 - удобно сгенерировать так: `base64 < google-service-account.json | tr -d '\n'`
+- в Google Cloud project этого service account должен быть включен `Google Sheets API`
+- саму таблицу нужно расшарить на service account email минимум с правами `Editor`
 
 ## 4. Создай сервис `webhook`
 

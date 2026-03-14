@@ -11,7 +11,8 @@ load_dotenv()
 
 
 async def main() -> None:
-    await get_sheets_store().ensure_schema()
+    if not await get_sheets_store().ensure_schema():
+        raise SystemExit("Google Sheet schema initialization failed. Check the error above.")
     print("Google Sheet schema is ready: worksheet orders")
 
 

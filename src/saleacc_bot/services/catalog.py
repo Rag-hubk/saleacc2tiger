@@ -12,69 +12,78 @@ from saleacc_bot.models import Product
 @dataclass(frozen=True)
 class ProductSpec:
     slug: str
+    category: str
     title: str
+    button_title: str
     description: str
     price_kopecks: int
+    official_price_kopecks: int
     sort_order: int
     features: tuple[str, ...]
+    audience: str
 
 
 PRODUCT_SPECS: tuple[ProductSpec, ...] = (
     ProductSpec(
         slug="gpt-plus-1m",
-        title="ChatGPT Plus · 1 месяц",
-        description="Тариф для ежедневной работы, учебы и регулярных задач в ChatGPT.",
+        category="chatgpt",
+        title="ChatGPT Plus",
+        button_title="💚 ChatGPT Plus — 499₽/мес",
+        description="ChatGPT Plus для ежедневной работы, учебы и регулярных задач.",
         price_kopecks=49900,
+        official_price_kopecks=158000,
         sort_order=10,
         features=(
-            "Расширенные возможности платного тарифа ChatGPT Plus",
-            "Работа с текстом, файлами, изображениями и документами",
-            "Codex для рабочих сценариев и кодовых задач",
-            "Расширенный голосовой режим",
-            "Приоритет относительно бесплатного тарифа",
+            "GPT-5 с продвинутым мышлением",
+            "Генерация картинок (DALL-E)",
+            "Создание видео (Sora, 720p)",
+            "Deep Research — глубокий анализ тем",
+            "Codex — AI-помощник для кода",
+            "До 160 сообщений / 3 часа",
         ),
+        audience="Для кого: фрилансеры, студенты, маркетологи, все кому нужен мощный AI каждый день",
     ),
     ProductSpec(
         slug="gpt-pro-1m",
-        title="ChatGPT Pro · 1 месяц",
-        description="Максимальный тариф ChatGPT на 1 месяц для высокой рабочей нагрузки.",
+        category="chatgpt",
+        title="ChatGPT Pro",
+        button_title="💛 ChatGPT Pro — 4 990₽/мес",
+        description="Максимальный тариф ChatGPT для высокой рабочей нагрузки.",
         price_kopecks=499000,
+        official_price_kopecks=1580000,
         sort_order=20,
         features=(
-            "Повышенные лимиты на модели и рабочие инструменты",
-            "Расширенный сценарий работы с кодом и сложными задачами",
-            "Больше ресурса для длинных рабочих сессий",
-            "Приоритетный доступ к новым возможностям",
-            "Формат на 1 месяц для быстрого старта",
+            "Безлимитные сообщения и загрузки",
+            "Pro-режим мышления GPT-5 (думает дольше = отвечает точнее)",
+            "Максимальный Deep Research и Agent Mode",
+            "Sora без ограничений",
+            "Расширенный Codex-агент",
+            "Приоритет во всём",
         ),
+        audience="Для кого: разработчики, аналитики, предприниматели, кто работает с AI на максимум",
     ),
     ProductSpec(
-        slug="gpt-pro-3m",
-        title="ChatGPT Pro · 3 месяца",
-        description="Максимальный тариф ChatGPT на 3 месяца без ежемесячного продления.",
-        price_kopecks=999000,
-        sort_order=30,
-        features=(
-            "Повышенные лимиты на модели и рабочие инструменты",
-            "Расширенный сценарий работы с кодом и сложными задачами",
-            "Больше ресурса для длинных рабочих сессий",
-            "Приоритетный доступ к новым возможностям",
-            "Формат на 3 месяца без ежемесячного продления",
-        ),
-    ),
-    ProductSpec(
-        slug="gpt-pro-6m",
-        title="ChatGPT Pro · 6 месяцев",
-        description="Максимальный тариф ChatGPT на 6 месяцев для долгой непрерывной работы.",
-        price_kopecks=1399000,
+        slug="gemini-ultra-1m",
+        category="gemini",
+        title="Google AI Ultra",
+        button_title="💙 Google AI Ultra — 7 990₽/мес",
+        description="Максимальная подписка Google AI для видео, изображений, исследований и AI-агентов.",
+        price_kopecks=799000,
+        official_price_kopecks=1975000,
         sort_order=40,
         features=(
-            "Повышенные лимиты на модели и рабочие инструменты",
-            "Расширенный сценарий работы с кодом и сложными задачами",
-            "Больше ресурса для длинных рабочих сессий",
-            "Приоритетный доступ к новым возможностям",
-            "Формат на 6 месяцев для долгой непрерывной работы",
+            "Gemini 3.1 Pro — самая умная модель Google",
+            "Nano Banana Pro — генерация и редактирование изображений нового уровня",
+            "Veo 3.1 — создание видео кинематографического качества",
+            "Flow — AI-инструмент для монтажа фильмов и сцен",
+            "Deep Research — автоматические исследования по любой теме",
+            "Agent Mode — AI сам выполняет задачи за тебя",
+            "25 000 AI-кредитов в месяц",
+            "30 ТБ облачного хранилища (Google Drive, Gmail, Photos)",
+            "YouTube Premium включён",
+            "NotebookLM Pro — AI-помощник для учёбы и работы",
         ),
+        audience="Для кого: контент-мейкеры, видеографы, дизайнеры, исследователи, все кто хочет максимум от Google AI",
     ),
 )
 
@@ -84,6 +93,11 @@ def get_product_spec(slug: str) -> ProductSpec | None:
         if spec.slug == slug:
             return spec
     return None
+
+
+def get_product_category(slug: str) -> str | None:
+    spec = get_product_spec(slug)
+    return spec.category if spec is not None else None
 
 
 async def seed_default_products(session: AsyncSession) -> None:

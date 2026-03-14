@@ -8,11 +8,43 @@ from saleacc_bot.models import Order, Product
 from saleacc_bot.services.catalog import get_product_spec
 
 MAIN_MENU_TEXT = (
-    "<b>Подписки ChatGPT</b>\n\n"
-    "В боте доступны <b>ChatGPT Plus</b> и <b>ChatGPT Pro</b> на разные сроки.\n"
-    "Оплата проходит через <b>ЮKassa</b> в рублях."
-    "\n\n<blockquote>Перед оплатой бот запросит e-mail для электронного чека.</blockquote>"
+    "👋 <b>Добро пожаловать в NH | STORE01!</b>\n\n"
+    "Мы продаём подписки на ChatGPT и Google Gemini в 2-3 раза дешевле, чем напрямую. "
+    "Оплата в рублях, без иностранных карт, без танцев с VPN при покупке.\n\n"
+    "🔹 <b>Почему нам доверяют:</b>\n\n"
+    "👤 Персональный аккаунт — ты единственный пользователь, никакого шаринга\n"
+    "💰 Экономия до 68% — платишь от 499 ₽ вместо 1 580 ₽\n"
+    "⚡ Автовыдача — аккаунт приходит автоматически за 1 минуту\n"
+    "🛡️ Гарантия 100% — если что-то не так, бесплатная замена\n"
+    "🎁 VPN в подарок — настроим, чтобы всё работало\n"
+    "💳 Оплата — карты РФ, СБП\n\n"
+    "📌 <b>Выбери раздел:</b>\n"
+    "🟢 ChatGPT — Plus / Pro\n"
+    "🔵 Gemini — Ultra"
 )
+
+SECTION_TEXTS = {
+    "chatgpt": (
+        "🧠 <b>ChatGPT — самая мощная нейросеть в мире</b>\n\n"
+        "Из России официально не оплатить — нужна иностранная карта и адрес за рубежом. "
+        "У нас всё проще: выбрал → оплатил → получил свой персональный аккаунт.\n\n"
+        "👤 Каждый аккаунт — персональный. Ты единственный пользователь.\n"
+        "🛡️ Гарантия 100% — замена при любой проблеме\n"
+        "⚡ Автовыдача — аккаунт за 1 минуту после оплаты\n"
+        "🎁 VPN в подарок — настроим, поможем\n\n"
+        "👇 <b>Выбери тариф:</b>"
+    ),
+    "gemini": (
+        "💎 <b>Google Gemini Ultra — вся мощь AI от Google</b>\n\n"
+        "Gemini Ultra — это максимальная подписка Google AI: генерация видео, картинок, исследования, "
+        "AI-агенты и 30 ТБ облака. Официально стоит $249.99/мес и недоступна в России напрямую.\n\n"
+        "👤 Персональный аккаунт — только ты пользуешься\n"
+        "🛡️ Гарантия 100% — замена при любой проблеме\n"
+        "⚡ Автовыдача — аккаунт за 1 минуту после оплаты\n"
+        "🎁 VPN в подарок — настроим, поможем\n\n"
+        "👇 <b>Выбрать:</b>"
+    ),
+}
 
 
 def is_admin(settings: Settings, user_id: int) -> bool:
@@ -23,84 +55,24 @@ def main_menu_payload(settings: Settings, user_id: int) -> tuple[str, InlineKeyb
     return MAIN_MENU_TEXT, main_menu_keyboard(is_admin=is_admin(settings, user_id), support_url=settings.support_url)
 
 
-def catalog_text(products: list[Product]) -> str:
-    plus_product = next((product for product in products if product.slug == "gpt-plus-1m"), None)
-    pro_products = [product for product in products if product.slug.startswith("gpt-pro-")]
-
-    lines = [
-        "<b>Каталог ChatGPT</b>",
-        "",
-        "Подберите тариф под свою нагрузку: повседневная работа, учеба, код или интенсивные рабочие сценарии.",
-        "",
-    ]
-    if plus_product is not None:
-        lines.append(f"<b>ChatGPT Plus</b> • <code>{format_price(plus_product.price_kopecks)}</code>")
-        lines.append("Для ежедневных задач, учебы, документов, контента и рабочих запросов.")
-        lines.append("")
-    if pro_products:
-        min_pro_price = min(product.price_kopecks for product in pro_products)
-        lines.append(f"<b>ChatGPT Pro</b> • от <code>{format_price(min_pro_price)}</code>")
-        lines.append("Для высокой нагрузки, длинных сессий и максимальных лимитов.")
-        lines.append("")
-    lines.append("<blockquote>Откройте раздел, чтобы посмотреть состав тарифа и перейти к оформлению.</blockquote>")
-    return "\n".join(lines)
+def section_text(category: str) -> str:
+    return SECTION_TEXTS[category]
 
 
 def product_text(product: Product) -> str:
     spec = get_product_spec(product.slug)
-    features = spec.features if spec else ()
-    if product.slug == "gpt-plus-1m":
-        lines = [
-            f"<b>{product.title}</b>",
-            "",
-            "<blockquote>Тариф для тех, кому нужен стабильный доступ к возможностям ChatGPT без переплаты за максимальные лимиты.</blockquote>",
-            "",
-            "<b>Подойдет, если вам нужен:</b>",
-            "• ежедневный рабочий инструмент для текста, документов и анализа",
-            "• комфортный тариф для учебы, контента и базовых кодовых задач",
-            "• платный доступ к ключевым возможностям ChatGPT без тарифа Pro",
-            "",
-            f"<b>Стоимость:</b> <code>{format_price(product.price_kopecks)}</code>",
-        ]
-    else:
-        lines = [
-            f"<b>{product.title}</b>",
-            "",
-            "<blockquote>Премиальный тариф для тех, кто использует ChatGPT как основной рабочий инструмент и не хочет упираться в лимиты.</blockquote>",
-            "",
-            "<b>Подойдет, если вам нужен:</b>",
-            "• интенсивный рабочий режим с высокой нагрузкой",
-            "• длинные сессии без постоянных ограничений",
-            "• расширенный сценарий для кода, исследований и сложных задач",
-            "",
-            f"<b>Стоимость:</b> <code>{format_price(product.price_kopecks)}</code>",
-        ]
-        if product.slug == "gpt-pro-3m":
-            lines.append("<i>Формат на 3 месяца без ежемесячного продления.</i>")
-        if product.slug == "gpt-pro-6m":
-            lines.append("<i>Формат на 6 месяцев для долгого периода без повторных покупок.</i>")
-    if features:
-        lines.append("")
-        lines.append("<b>Что входит:</b>")
-        lines.extend(f"• {feature}" for feature in features)
-    return "\n".join(lines)
+    if spec is None:
+        return f"<b>{product.title}</b>\n\n<code>{format_price(product.price_kopecks)}</code>"
 
-
-def pro_group_text(products: list[Product]) -> str:
+    savings = spec.official_price_kopecks - spec.price_kopecks
     lines = [
-        "<b>ChatGPT Pro</b>",
+        f"<b>{spec.button_title}</b>",
+        f"Официальная цена: {format_price(spec.official_price_kopecks)} | Экономия: {format_price(savings)}",
         "",
-        "<blockquote>Линейка для интенсивной работы: больше лимитов, выше приоритет и удобный выбор срока под нагрузку.</blockquote>",
-        "",
-        "<b>Что получает клиент:</b>",
-        "• высокий рабочий лимит на модели и инструменты",
-        "• расширенный сценарий работы с кодом и исследовательскими задачами",
-        "• выбор срока под бюджет и формат использования",
-        "",
-        "<b>Варианты:</b>",
+        "<b>Что входит:</b>",
     ]
-    for product in sorted(products, key=lambda item: item.sort_order):
-        lines.append(f"• {product.title} — <code>{format_price(product.price_kopecks)}</code>")
+    lines.extend(f"- {feature}" for feature in spec.features)
+    lines.extend(("", spec.audience))
     return "\n".join(lines)
 
 
@@ -121,9 +93,7 @@ def orders_text(orders: list[Order]) -> str:
         return "<b>Мои заказы</b>\n\n<i>Заказов пока нет.</i>"
     lines = ["<b>Мои заказы</b>", ""]
     for order in orders:
-        lines.append(
-            f"<code>{order.id[:8]}</code> • <b>{order.product_title}</b>"
-        )
+        lines.append(f"<code>{order.id[:8]}</code> • <b>{order.product_title}</b>")
         lines.append(f"{format_order_status(order.status)} • <code>{format_price(order.total_price)}</code>")
         lines.append("")
     return "\n".join(lines)
@@ -142,6 +112,6 @@ def format_order_status(status: str) -> str:
 def format_price(kopecks: int) -> str:
     if kopecks % 100 == 0:
         rubles = kopecks // 100
-        return f"{rubles:,} ₽".replace(",", " ")
+        return f"{rubles:,}₽".replace(",", " ")
     rubles = kopecks / 100
-    return f"{rubles:,.2f} ₽".replace(",", " ")
+    return f"{rubles:,.2f}₽".replace(",", " ")
