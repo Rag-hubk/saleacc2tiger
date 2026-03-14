@@ -9,3 +9,8 @@ class CheckoutStates(StatesGroup):
 
 class AdminDeliveryStates(StatesGroup):
     waiting_for_delivery_text = State()
+
+
+class AdminBroadcastStates(StatesGroup):
+    waiting_for_text = State()
+    waiting_for_buttons = State()

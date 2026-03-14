@@ -88,6 +88,7 @@ def admin_panel_keyboard() -> InlineKeyboardMarkup:
         inline_keyboard=[
             [_button("Статистика", callback_data="admin_stats")],
             [_button("Последние заказы", callback_data="admin_orders")],
+            [_button("Рассылка", callback_data="admin_broadcast")],
             [_button("Назад", callback_data="main")],
         ]
     )
@@ -95,3 +96,14 @@ def admin_panel_keyboard() -> InlineKeyboardMarkup:
 
 def admin_back_keyboard() -> InlineKeyboardMarkup:
     return InlineKeyboardMarkup(inline_keyboard=[[_button("Назад", callback_data="admin_panel")]])
+
+
+def admin_broadcast_preview_keyboard() -> InlineKeyboardMarkup:
+    return InlineKeyboardMarkup(
+        inline_keyboard=[
+            [_button("✅ Отправить", callback_data="admin_broadcast_send")],
+            [_button("✏️ Изменить текст", callback_data="admin_broadcast_edit_text")],
+            [_button("🔘 Изменить кнопки", callback_data="admin_broadcast_edit_buttons")],
+            [_button("❌ Отменить", callback_data="admin_broadcast_cancel")],
+        ]
+    )
