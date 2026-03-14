@@ -11,9 +11,13 @@ Telegram-бот витрины `NH | STORE01` для продажи:
 - стартовый экран с двумя разделами: `ChatGPT` и `Gemini`
 - карточки тарифов с актуальными ценами, официальной ценой и экономией
 - оформление заказа через `ЮKassa`
+- `ChatGPT`: резерв аккаунта на `20 минут` после выдачи ссылки на оплату
+- `ChatGPT`: автовыдача из CSV-стока после успешной оплаты
+- `Gemini`: без автовыдачи, выдача вручную в течение `1–24 часов`
 - сохранение заказов в БД
 - синхронизация заказов в Google Sheets
 - админ-панель со статистикой и последними заказами
+- ручная выдача через команду `/deliver <order_id>`
 
 ## Каталог
 
@@ -47,9 +51,28 @@ Telegram-бот витрины `NH | STORE01` для продажи:
 Опциональные:
 
 - `GOOGLE_ORDERS_WORKSHEET` default `orders`
+- `CHATGPT_STOCK_CSV_URL` direct URL to CSV export
+- `CHATGPT_STOCK_CSV_PATH` local CSV path for stock import
+- `CHATGPT_STOCK_RESERVE_MINUTES` default `20`
 - `YOOKASSA_API_BASE` default `https://api.yookassa.ru/v3`
 - `YOOKASSA_VAT_CODE` default `1`
 - `YOOKASSA_TAX_SYSTEM_CODE`
+
+## CSV stock
+
+Для автовыдачи `ChatGPT` бот ожидает CSV с колонками:
+
+```text
+item_id,access_login,access_secret,note
+```
+
+Импорт вручную:
+
+```bash
+PYTHONPATH=src python3 scripts/import_chatgpt_stock.py
+```
+
+Если `CHATGPT_STOCK_CSV_URL` или `CHATGPT_STOCK_CSV_PATH` настроен, бот подтягивает актуальный GPT-сток перед резервом.
 
 ## Google Sheets
 

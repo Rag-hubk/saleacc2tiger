@@ -49,6 +49,9 @@ class Settings:
     google_service_account_json: str
     google_service_account_json_b64: str
     google_orders_worksheet: str
+    chatgpt_stock_csv_url: str
+    chatgpt_stock_csv_path: str
+    chatgpt_stock_reserve_minutes: int
 
     yookassa_shop_id: str
     yookassa_secret_key: str
@@ -72,6 +75,9 @@ def get_settings() -> Settings:
         google_service_account_json=_optional_env("GOOGLE_SERVICE_ACCOUNT_JSON"),
         google_service_account_json_b64=_optional_env("GOOGLE_SERVICE_ACCOUNT_JSON_B64"),
         google_orders_worksheet=os.getenv("GOOGLE_ORDERS_WORKSHEET", "orders").strip() or "orders",
+        chatgpt_stock_csv_url=_optional_env("CHATGPT_STOCK_CSV_URL"),
+        chatgpt_stock_csv_path=_optional_env("CHATGPT_STOCK_CSV_PATH"),
+        chatgpt_stock_reserve_minutes=_parse_int(os.getenv("CHATGPT_STOCK_RESERVE_MINUTES"), 20),
         yookassa_shop_id=_require_env("YOOKASSA_SHOP_ID"),
         yookassa_secret_key=_require_env("YOOKASSA_SECRET_KEY"),
         yookassa_return_url=_require_env("YOOKASSA_RETURN_URL"),

@@ -21,7 +21,12 @@ cp .env.example .env
 - или пропиши `GOOGLE_SERVICE_ACCOUNT_JSON`
 - или пропиши `GOOGLE_SERVICE_ACCOUNT_JSON_B64`
 
-4. Первый деплой:
+4. Для автовыдачи `ChatGPT` настрой источник CSV-стока:
+
+- пропиши `CHATGPT_STOCK_CSV_URL`
+- или `CHATGPT_STOCK_CSV_PATH`
+
+5. Первый деплой:
 
 ```bash
 bash scripts/bootstrap_vps.sh

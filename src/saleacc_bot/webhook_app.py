@@ -18,6 +18,7 @@ from saleacc_bot.services.orders import (
     mark_order_paid,
 )
 from saleacc_bot.services.sheets_store import get_sheets_store
+from saleacc_bot.services.stock import claim_chatgpt_account, cleanup_expired_reservations, order_needs_auto_delivery, release_chatgpt_reservation
 from saleacc_bot.services.yookassa import YooKassaClient
 
 app = FastAPI(title="saleacc yookassa webhooks")
@@ -39,6 +40,7 @@ async def on_startup() -> None:
     await init_db()
     async with get_session() as session:
         await seed_default_products(session)
+        await cleanup_expired_reservations(session)
     await get_sheets_store().ensure_schema()
 
 
@@ -82,11 +84,17 @@ async def yookassa_webhook(request: Request) -> dict[str, str]:
                 )
                 if order is None:
                     raise HTTPException(status_code=500, detail="cannot update order")
+                delivered_account = None
+                if order_needs_auto_delivery(order):
+                    try:
+                        delivered_account = await claim_chatgpt_account(session, settings, order)
+                    except RuntimeError:
+                        delivered_account = None
                 await get_sheets_store().upsert_order(order)
                 if not already_paid:
                     bot = Bot(token=settings.bot_token)
                     try:
-                        await notify_order_paid(bot, settings, order)
+                        await notify_order_paid(bot, settings, order, stock_account=delivered_account)
                     finally:
                         await bot.session.close()
                 return {"result": "ok"}
@@ -99,6 +107,8 @@ async def yookassa_webhook(request: Request) -> dict[str, str]:
                     reason="YooKassa canceled payment",
                 )
                 if order is not None:
+                    if order_needs_auto_delivery(order):
+                        await release_chatgpt_reservation(session, order)
                     await get_sheets_store().upsert_order(order)
                 return {"result": "ok"}
 

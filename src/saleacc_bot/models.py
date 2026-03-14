@@ -67,11 +67,32 @@ class Order(Base):
     provider_payment_id: Mapped[Optional[str]] = mapped_column(String(255), nullable=True, index=True)
     provider_status: Mapped[Optional[str]] = mapped_column(String(64), nullable=True)
     payment_confirmation_url: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
+    assigned_stock_item_id: Mapped[Optional[str]] = mapped_column(String(128), nullable=True, index=True)
     cancellation_reason: Mapped[Optional[str]] = mapped_column(String(255), nullable=True)
     paid_at: Mapped[Optional[datetime]] = mapped_column(DateTime(timezone=True), nullable=True)
+    reserved_until: Mapped[Optional[datetime]] = mapped_column(DateTime(timezone=True), nullable=True)
     cancelled_at: Mapped[Optional[datetime]] = mapped_column(DateTime(timezone=True), nullable=True)
+    delivered_at: Mapped[Optional[datetime]] = mapped_column(DateTime(timezone=True), nullable=True)
 
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow)
     updated_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow, onupdate=utcnow)
 
     product: Mapped[Product] = relationship(back_populates="orders")
+
+
+class StockAccount(Base):
+    __tablename__ = "stock_accounts"
+
+    id: Mapped[int] = mapped_column(primary_key=True)
+    pool: Mapped[str] = mapped_column(String(64), index=True)
+    item_id: Mapped[str] = mapped_column(String(128), unique=True, index=True)
+    access_login: Mapped[str] = mapped_column(String(255))
+    access_secret: Mapped[str] = mapped_column(Text)
+    note: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
+    is_active: Mapped[bool] = mapped_column(Boolean, default=True, index=True)
+    reserved_for_order_id: Mapped[Optional[str]] = mapped_column(String(36), nullable=True, index=True)
+    reserved_until: Mapped[Optional[datetime]] = mapped_column(DateTime(timezone=True), nullable=True, index=True)
+    delivered_for_order_id: Mapped[Optional[str]] = mapped_column(String(36), nullable=True, index=True)
+    delivered_at: Mapped[Optional[datetime]] = mapped_column(DateTime(timezone=True), nullable=True)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow)
+    updated_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow, onupdate=utcnow)

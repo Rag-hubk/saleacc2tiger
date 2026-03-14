@@ -39,6 +39,8 @@ DATABASE_URL=${{Postgres.DATABASE_URL}}
 - `GOOGLE_SHEET_ID`
 - `GOOGLE_ORDERS_WORKSHEET`
 - `GOOGLE_SERVICE_ACCOUNT_JSON_B64` или `GOOGLE_SERVICE_ACCOUNT_JSON`
+- `CHATGPT_STOCK_CSV_URL`
+- `CHATGPT_STOCK_RESERVE_MINUTES`
 - `YOOKASSA_SHOP_ID`
 - `YOOKASSA_SECRET_KEY`
 - `YOOKASSA_RETURN_URL`
@@ -53,6 +55,12 @@ DATABASE_URL=${{Postgres.DATABASE_URL}}
 - удобно сгенерировать так: `base64 < google-service-account.json | tr -d '\n'`
 - в Google Cloud project этого service account должен быть включен `Google Sheets API`
 - саму таблицу нужно расшарить на service account email минимум с правами `Editor`
+
+Важно для GPT-стока:
+
+- `CHATGPT_STOCK_CSV_URL` должен вести на CSV с колонками `item_id,access_login,access_secret,note`
+- резерв GPT-аккаунта держится `20 минут` с момента выдачи ссылки на оплату
+- для `Gemini` автовыдача не используется, после оплаты бот сообщает срок `1–24 часа`
 
 ## 4. Создай сервис `webhook`
 

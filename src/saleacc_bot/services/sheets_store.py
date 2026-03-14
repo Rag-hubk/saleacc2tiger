@@ -33,8 +33,11 @@ ORDER_HEADERS = [
     "payment_id",
     "payment_status",
     "confirmation_url",
+    "assigned_stock_item_id",
     "paid_at",
+    "reserved_until",
     "cancelled_at",
+    "delivered_at",
     "cancellation_reason",
 ]
 
@@ -195,8 +198,11 @@ class SheetsStore:
             "payment_id": order.provider_payment_id or "",
             "payment_status": order.provider_status or "",
             "confirmation_url": order.payment_confirmation_url or "",
+            "assigned_stock_item_id": order.assigned_stock_item_id or "",
             "paid_at": _dt(order.paid_at),
+            "reserved_until": _dt(order.reserved_until),
             "cancelled_at": _dt(order.cancelled_at),
+            "delivered_at": _dt(order.delivered_at),
             "cancellation_reason": order.cancellation_reason or "",
         }
         return SheetOrderRow(values=values)

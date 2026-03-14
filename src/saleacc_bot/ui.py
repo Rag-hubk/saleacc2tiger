@@ -5,7 +5,7 @@ from aiogram.types import InlineKeyboardMarkup
 from saleacc_bot.config import Settings
 from saleacc_bot.keyboards import main_menu_keyboard
 from saleacc_bot.models import Order, Product
-from saleacc_bot.services.catalog import get_product_spec
+from saleacc_bot.services.catalog import get_product_category, get_product_spec
 
 MAIN_MENU_TEXT = (
     "👋 <b>Добро пожаловать в NH | STORE01!</b>\n\n"
@@ -13,8 +13,8 @@ MAIN_MENU_TEXT = (
     "Оплата в рублях, без иностранных карт, без танцев с VPN при покупке.\n\n"
     "🔹 <b>Почему нам доверяют:</b>\n\n"
     "👤 Персональный аккаунт — ты единственный пользователь, никакого шаринга\n"
-    "💰 Экономия до 68% — платишь от 499 ₽ вместо 1 580 ₽\n"
-    "⚡ Автовыдача — аккаунт приходит автоматически за 1 минуту\n"
+    "💰 Экономия до 68% — платишь от 499₽ вместо 1 580₽\n"
+    "⚡ GPT выдаём автоматически, Gemini — в течение 1-24 часов\n"
     "🛡️ Гарантия 100% — если что-то не так, бесплатная замена\n"
     "🎁 VPN в подарок — настроим, чтобы всё работало\n"
     "💳 Оплата — карты РФ, СБП\n\n"
@@ -40,7 +40,7 @@ SECTION_TEXTS = {
         "AI-агенты и 30 ТБ облака. Официально стоит $249.99/мес и недоступна в России напрямую.\n\n"
         "👤 Персональный аккаунт — только ты пользуешься\n"
         "🛡️ Гарантия 100% — замена при любой проблеме\n"
-        "⚡ Автовыдача — аккаунт за 1 минуту после оплаты\n"
+        "⏳ Выдача — в течение 1-24 часов после оплаты\n"
         "🎁 VPN в подарок — настроим, поможем\n\n"
         "👇 <b>Выбрать:</b>"
     ),
@@ -77,13 +77,19 @@ def product_text(product: Product) -> str:
 
 
 def payment_caption(*, product: Product, email: str, order_id: str, offer_url: str) -> str:
+    category = get_product_category(product.slug)
+    delivery_block = (
+        "Аккаунт уже зарезервирован на 20 минут. После успешной оплаты доступ придет автоматически в этого бота."
+        if category == "chatgpt"
+        else "После оплаты доступ по этому тарифу выдается вручную в бота в течение 1-24 часов."
+    )
     return (
         "<b>Заказ оформлен</b>\n\n"
         f"<b>Тариф:</b> {product.title}\n"
         f"<b>Сумма:</b> <code>{format_price(product.price_kopecks)}</code>\n"
         f"<b>E-mail для чека:</b> <code>{email}</code>\n"
         f"<b>Номер заказа:</b> <code>{order_id[:8]}</code>\n\n"
-        "<blockquote>Нажмите кнопку оплаты ниже. Если статус не обновится автоматически, используйте кнопку проверки.</blockquote>\n\n"
+        f"<blockquote>{delivery_block}</blockquote>\n\n"
         f"Оплачивая заказ, вы подтверждаете согласие с <a href=\"{offer_url}\">публичной офертой</a>."
     )
 

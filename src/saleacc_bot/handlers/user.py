@@ -31,6 +31,7 @@ from saleacc_bot.services.orders import (
     mark_order_paid,
 )
 from saleacc_bot.services.sheets_store import get_sheets_store
+from saleacc_bot.services.stock import claim_chatgpt_account, order_needs_auto_delivery, release_chatgpt_reservation, reserve_chatgpt_account
 from saleacc_bot.services.users import get_user, set_user_email, touch_user
 from saleacc_bot.services.yookassa import YooKassaClient
 from saleacc_bot.states import CheckoutStates
@@ -111,6 +112,40 @@ async def _start_checkout(*, chat_id: int, user_id: int, username: str | None, p
                     await get_sheets_store().upsert_order(failed_order)
             return False, "ЮKassa вернула неполный ответ. Проверь настройки магазина."
 
+        if order_needs_auto_delivery(order):
+            try:
+                reserved_account = await reserve_chatgpt_account(session, settings, order)
+            except RuntimeError as exc:
+                try:
+                    await yookassa_client.cancel_payment(payment.payment_id)
+                except Exception:
+                    pass
+                await mark_order_failed(
+                    session,
+                    order_id=order.id,
+                    provider_status=payment.status or "stock_config_error",
+                    reason=str(exc)[:250],
+                )
+                failed_order = await get_order(session, order.id)
+                if failed_order is not None:
+                    await get_sheets_store().upsert_order(failed_order)
+                return False, "Автовыдача GPT сейчас недоступна. Проверь настройку CSV-источника стока."
+            if reserved_account is None:
+                try:
+                    await yookassa_client.cancel_payment(payment.payment_id)
+                except Exception:
+                    pass
+                await mark_order_failed(
+                    session,
+                    order_id=order.id,
+                    provider_status=payment.status or "stock_unavailable",
+                    reason="No ChatGPT stock available for reservation",
+                )
+                failed_order = await get_order(session, order.id)
+                if failed_order is not None:
+                    await get_sheets_store().upsert_order(failed_order)
+                return False, "Сейчас нет свободных GPT-аккаунтов для резерва. Попробуйте позже."
+
         await get_sheets_store().upsert_order(order)
         await bot.send_message(
             chat_id=chat_id,
@@ -144,9 +179,15 @@ async def _sync_order_from_provider(*, order_id: str, bot) -> tuple[bool, str]:
             )
             if order is None:
                 return False, "Не удалось обновить заказ."
+            delivered_account = None
+            if order_needs_auto_delivery(order):
+                try:
+                    delivered_account = await claim_chatgpt_account(session, settings, order)
+                except RuntimeError:
+                    delivered_account = None
             await get_sheets_store().upsert_order(order)
             if not was_paid:
-                await notify_order_paid(bot, settings, order)
+                await notify_order_paid(bot, settings, order, stock_account=delivered_account)
             return True, "Оплата подтверждена."
 
         if payment.status == "canceled":
@@ -157,6 +198,8 @@ async def _sync_order_from_provider(*, order_id: str, bot) -> tuple[bool, str]:
                 reason="YooKassa canceled payment",
             )
             if order is not None:
+                if order_needs_auto_delivery(order):
+                    await release_chatgpt_reservation(session, order)
                 await get_sheets_store().upsert_order(order)
             return False, "Платеж отменен в ЮKassa."
 
@@ -393,6 +436,8 @@ async def on_order_cancel(callback: CallbackQuery) -> None:
             reason="Cancelled by user",
         )
         if order is not None:
+            if order_needs_auto_delivery(order):
+                await release_chatgpt_reservation(session, order)
             await get_sheets_store().upsert_order(order)
 
     await _render_main(callback)

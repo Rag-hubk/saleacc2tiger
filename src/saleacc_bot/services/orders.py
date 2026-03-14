@@ -127,6 +127,15 @@ async def mark_order_failed(
     return order
 
 
+async def mark_order_delivered(session: AsyncSession, *, order_id: str) -> Order | None:
+    order = await get_order(session, order_id)
+    if order is None:
+        return None
+    order.delivered_at = datetime.now(timezone.utc)
+    await session.commit()
+    return order
+
+
 async def get_order(session: AsyncSession, order_id: str) -> Order | None:
     return await session.scalar(
         select(Order)

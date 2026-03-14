@@ -9,6 +9,7 @@ from saleacc_bot.db import init_db
 from saleacc_bot.handlers import admin, user
 from saleacc_bot.services.catalog import seed_default_products
 from saleacc_bot.services.sheets_store import get_sheets_store
+from saleacc_bot.services.stock import cleanup_expired_reservations
 from saleacc_bot.db import get_session
 
 
@@ -18,6 +19,7 @@ async def start_polling() -> None:
 
     async with get_session() as session:
         await seed_default_products(session)
+        await cleanup_expired_reservations(session)
 
     await get_sheets_store().ensure_schema()
 
