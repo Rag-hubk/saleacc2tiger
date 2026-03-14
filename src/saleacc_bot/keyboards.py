@@ -73,7 +73,6 @@ def pay_order_keyboard(*, confirmation_url: str, order_id: str) -> InlineKeyboar
     return InlineKeyboardMarkup(
         inline_keyboard=[
             [_button("Оплатить через ЮKassa", url=confirmation_url)],
-            [_button("Проверить оплату", callback_data=f"order_check:{order_id}")],
             [_button("Отменить заказ", callback_data=f"order_cancel:{order_id}")],
         ]
     )
