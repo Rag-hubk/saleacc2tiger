@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+from pathlib import Path
+
 from aiogram.types import InlineKeyboardMarkup
 
 from saleacc_bot.config import Settings
@@ -47,6 +49,13 @@ SECTION_TEXTS = {
     ),
 }
 
+_IMAGE_DIR = Path(__file__).resolve().parents[2] / "image"
+MAIN_MENU_IMAGE = _IMAGE_DIR / "стартфото.jpeg"
+SECTION_IMAGES = {
+    "chatgpt": _IMAGE_DIR / "Раздел ChatGPT.jpeg",
+    "gemini": _IMAGE_DIR / "Раздел Gemini.jpeg",
+}
+
 
 def is_admin(settings: Settings, user_id: int) -> bool:
     return user_id in settings.admin_ids
@@ -54,6 +63,14 @@ def is_admin(settings: Settings, user_id: int) -> bool:
 
 def main_menu_payload(settings: Settings, user_id: int) -> tuple[str, InlineKeyboardMarkup]:
     return MAIN_MENU_TEXT, main_menu_keyboard(is_admin=is_admin(settings, user_id), support_url=settings.support_url)
+
+
+def main_menu_image_path() -> Path:
+    return MAIN_MENU_IMAGE
+
+
+def section_image_path(category: str) -> Path | None:
+    return SECTION_IMAGES.get(category)
 
 
 def section_text(category: str) -> str:

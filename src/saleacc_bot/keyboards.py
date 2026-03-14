@@ -34,7 +34,7 @@ def section_keyboard(products: list[Product], *, back_callback: str = "main") ->
         spec = get_product_spec(product.slug)
         label = spec.button_title if spec is not None else product.title
         rows.append([_button(label, callback_data=f"product:{product.slug}")])
-    rows.append([_button("Назад", callback_data=back_callback)])
+    rows.append([_button("В главное меню", callback_data=back_callback)])
     return InlineKeyboardMarkup(inline_keyboard=rows)
 
 
@@ -43,6 +43,7 @@ def product_keyboard(product_slug: str, *, back_callback: str) -> InlineKeyboard
         inline_keyboard=[
             [_button("Оформить заказ", callback_data=f"buy:{product_slug}")],
             [_button("Назад", callback_data=back_callback)],
+            [_button("В главное меню", callback_data="main")],
         ]
     )
 
@@ -53,6 +54,7 @@ def email_choice_keyboard(*, product_slug: str, email: str) -> InlineKeyboardMar
             [_button(f"Использовать {email}", callback_data=f"email_use:{product_slug}")],
             [_button("Ввести другой e-mail", callback_data=f"email_change:{product_slug}")],
             [_button("Назад", callback_data=f"product:{product_slug}")],
+            [_button("В главное меню", callback_data="main")],
         ]
     )
 
@@ -68,7 +70,7 @@ def pay_order_keyboard(*, confirmation_url: str, order_id: str) -> InlineKeyboar
 
 
 def orders_keyboard() -> InlineKeyboardMarkup:
-    return InlineKeyboardMarkup(inline_keyboard=[[_button("Назад", callback_data="main")]])
+    return InlineKeyboardMarkup(inline_keyboard=[[_button("В главное меню", callback_data="main")]])
 
 
 def admin_panel_keyboard() -> InlineKeyboardMarkup:

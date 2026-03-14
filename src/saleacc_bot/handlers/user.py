@@ -6,7 +6,7 @@ from aiogram import F, Router
 from aiogram.exceptions import TelegramBadRequest
 from aiogram.filters import CommandStart
 from aiogram.fsm.context import FSMContext
-from aiogram.types import CallbackQuery, Message
+from aiogram.types import CallbackQuery, FSInputFile, Message
 
 from saleacc_bot.config import get_settings
 from saleacc_bot.db import get_session
@@ -37,9 +37,11 @@ from saleacc_bot.services.yookassa import YooKassaClient
 from saleacc_bot.states import CheckoutStates
 from saleacc_bot.ui import (
     main_menu_payload,
+    main_menu_image_path,
     orders_text,
     payment_caption,
     product_text,
+    section_image_path,
     section_text,
 )
 
@@ -49,20 +51,43 @@ yookassa_client = YooKassaClient(settings)
 EMAIL_RE = re.compile(r"^[A-Z0-9._%+\-]+@[A-Z0-9.\-]+\.[A-Z]{2,}$", re.IGNORECASE)
 
 
-async def _safe_edit(callback: CallbackQuery, text: str, reply_markup=None) -> None:
+async def _send_content(*, bot, chat_id: int, text: str, reply_markup=None, photo_path=None) -> None:
+    if photo_path is not None:
+        await bot.send_photo(
+            chat_id=chat_id,
+            photo=FSInputFile(str(photo_path)),
+            caption=text,
+            reply_markup=reply_markup,
+            parse_mode="HTML",
+        )
+        return
+    await bot.send_message(chat_id=chat_id, text=text, reply_markup=reply_markup, parse_mode="HTML")
+
+
+async def _delete_callback_message(callback: CallbackQuery) -> None:
     if callback.message is None:
         return
     try:
-        await callback.message.edit_text(text, reply_markup=reply_markup, parse_mode="HTML")
-    except TelegramBadRequest as exc:
-        if "message is not modified" in str(exc):
-            return
-        await callback.message.answer(text, reply_markup=reply_markup, parse_mode="HTML")
+        await callback.message.delete()
+    except TelegramBadRequest:
+        pass
+
+
+async def _replace_message(callback: CallbackQuery, text: str, reply_markup=None, *, photo_path=None) -> None:
+    chat_id = callback.message.chat.id if callback.message is not None else callback.from_user.id
+    await _delete_callback_message(callback)
+    await _send_content(
+        bot=callback.bot,
+        chat_id=chat_id,
+        text=text,
+        reply_markup=reply_markup,
+        photo_path=photo_path,
+    )
 
 
 async def _render_main(callback: CallbackQuery) -> None:
     text, keyboard = main_menu_payload(settings, callback.from_user.id)
-    await _safe_edit(callback, text, keyboard)
+    await _replace_message(callback, text, keyboard, photo_path=main_menu_image_path())
 
 
 async def _start_checkout(*, chat_id: int, user_id: int, username: str | None, product_slug: str, email: str, bot) -> tuple[bool, str]:
@@ -223,7 +248,13 @@ async def on_start(message: Message, state: FSMContext) -> None:
             last_name=message.from_user.last_name,
         )
     text, keyboard = main_menu_payload(settings, message.from_user.id)
-    await message.answer(text, reply_markup=keyboard, parse_mode="HTML")
+    await _send_content(
+        bot=message.bot,
+        chat_id=message.chat.id,
+        text=text,
+        reply_markup=keyboard,
+        photo_path=main_menu_image_path(),
+    )
 
 
 @router.callback_query(F.data == "main")
@@ -250,7 +281,12 @@ async def on_section(callback: CallbackQuery) -> None:
     if not products:
         await callback.answer("Раздел временно недоступен.", show_alert=True)
         return
-    await _safe_edit(callback, section_text(category), section_keyboard(products))
+    await _replace_message(
+        callback,
+        section_text(category),
+        section_keyboard(products),
+        photo_path=section_image_path(category),
+    )
     await callback.answer()
 
 
@@ -258,7 +294,7 @@ async def on_section(callback: CallbackQuery) -> None:
 async def on_orders(callback: CallbackQuery) -> None:
     async with get_session() as session:
         orders = list(await list_user_orders(session, user_id=callback.from_user.id, limit=10))
-    await _safe_edit(callback, orders_text(orders), orders_keyboard())
+    await _replace_message(callback, orders_text(orders), orders_keyboard())
     await callback.answer()
 
 
@@ -277,7 +313,7 @@ async def on_product(callback: CallbackQuery) -> None:
         return
     category = get_product_category(product.slug) or "chatgpt"
     back_callback = f"section:{category}"
-    await _safe_edit(callback, product_text(product), product_keyboard(product.slug, back_callback=back_callback))
+    await _replace_message(callback, product_text(product), product_keyboard(product.slug, back_callback=back_callback))
     await callback.answer()
 
 
@@ -288,7 +324,12 @@ async def on_pro_group(callback: CallbackQuery) -> None:
     if not products:
         await callback.answer("Раздел временно недоступен.", show_alert=True)
         return
-    await _safe_edit(callback, section_text("chatgpt"), section_keyboard(products))
+    await _replace_message(
+        callback,
+        section_text("chatgpt"),
+        section_keyboard(products),
+        photo_path=section_image_path("chatgpt"),
+    )
     await callback.answer()
 
 
@@ -304,7 +345,7 @@ async def on_buy(callback: CallbackQuery, state: FSMContext) -> None:
 
     await state.update_data(product_slug=product_slug)
     if user and user.email:
-        await _safe_edit(
+        await _replace_message(
             callback,
             (
                 f"<b>{product.title}</b>\n\n"
@@ -315,7 +356,7 @@ async def on_buy(callback: CallbackQuery, state: FSMContext) -> None:
         )
     else:
         await state.set_state(CheckoutStates.waiting_for_email)
-        await _safe_edit(
+        await _replace_message(
             callback,
             (
                 f"<b>{product.title}</b>\n\n"
@@ -333,7 +374,7 @@ async def on_email_use(callback: CallbackQuery, state: FSMContext) -> None:
     if user is None or not user.email:
         await state.update_data(product_slug=product_slug)
         await state.set_state(CheckoutStates.waiting_for_email)
-        await _safe_edit(callback, "Отправьте e-mail для электронного чека.")
+        await _replace_message(callback, "Отправьте e-mail для электронного чека.")
         await callback.answer()
         return
 
@@ -346,11 +387,7 @@ async def on_email_use(callback: CallbackQuery, state: FSMContext) -> None:
         email=user.email,
         bot=callback.bot,
     )
-    if callback.message is not None:
-        try:
-            await callback.message.delete()
-        except TelegramBadRequest:
-            pass
+    await _delete_callback_message(callback)
     await callback.answer("Заказ создан" if ok else result, show_alert=not ok)
 
 
@@ -359,7 +396,7 @@ async def on_email_change(callback: CallbackQuery, state: FSMContext) -> None:
     product_slug = callback.data.split(":", maxsplit=1)[1]
     await state.update_data(product_slug=product_slug)
     await state.set_state(CheckoutStates.waiting_for_email)
-    await _safe_edit(callback, "Отправьте новый e-mail для электронного чека.")
+    await _replace_message(callback, "Отправьте новый e-mail для электронного чека.")
     await callback.answer()
 
 

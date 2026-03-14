@@ -2,11 +2,12 @@ from __future__ import annotations
 
 from aiogram import Bot
 from aiogram.exceptions import TelegramBadRequest, TelegramForbiddenError
+from aiogram.types import FSInputFile
 
 from saleacc_bot.config import Settings
 from saleacc_bot.models import Order, StockAccount
 from saleacc_bot.services.stock import order_needs_auto_delivery
-from saleacc_bot.ui import format_price, main_menu_payload
+from saleacc_bot.ui import format_price, main_menu_image_path, main_menu_payload
 
 
 async def notify_order_paid(
@@ -24,9 +25,10 @@ async def notify_order_paid(
             parse_mode="HTML",
         )
         main_text, main_keyboard = main_menu_payload(settings, order.tg_user_id)
-        await bot.send_message(
+        await bot.send_photo(
             chat_id=order.tg_user_id,
-            text=main_text,
+            photo=FSInputFile(str(main_menu_image_path())),
+            caption=main_text,
             reply_markup=main_keyboard,
             parse_mode="HTML",
         )
